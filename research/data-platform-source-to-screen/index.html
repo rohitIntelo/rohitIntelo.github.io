@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Source to screen — how retail data becomes a plan</title>
+<meta name="description" content="The Intelo data platform: ingestion, the cookbook model, product and location hierarchies, and the gold stock pipeline.">
+<style>
+  :root {
+    --bg: #fdfdfc; --fg: #1a1a18; --muted: #6b6b66; --rule: #d8d8d2;
+    --accent: #2f6b57; --code-bg: #f3f2ee; --card: #f8f7f4; --warn: #8a5a2b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #16161a; --fg: #e6e6e2; --muted: #9a9a94; --rule: #32323a;
+      --accent: #79b89f; --code-bg: #1f1f25; --card: #1c1c22; --warn: #d6a06a;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--bg); color: var(--fg); }
+  body {
+    max-width: 47rem; margin: 0 auto;
+    padding-block: 3.5rem 5rem; padding-left: 1.25rem; padding-right: 1.25rem;
+    font: 17px/1.65 Georgia, 'Iowan Old Style', 'Times New Roman', serif;
+    -webkit-text-size-adjust: 100%;
+  }
+  h1 { font-size: 1.9rem; line-height: 1.18; font-weight: normal; margin: 0 0 .4rem; letter-spacing: -.01em; }
+  .sub { color: var(--muted); font-style: italic; margin: 0 0 2rem; }
+  h2 {
+    font-size: 1.3rem; font-weight: normal; margin: 3.25rem 0 .75rem;
+    padding-top: 1.25rem; border-top: 1px solid var(--rule); letter-spacing: -.01em;
+  }
+  h2 .n {
+    font: 600 .7rem/1 ui-monospace, Menlo, monospace; color: var(--accent);
+    letter-spacing: .12em; display: block; margin-bottom: .5rem; text-transform: uppercase;
+  }
+  h3 { font-size: 1.04rem; font-weight: 600; margin: 1.9rem 0 .4rem; }
+  h4 { font-size: .95rem; font-weight: 600; margin: 1.3rem 0 .3rem; color: var(--muted); }
+  p { margin: 0 0 1rem; }
+  a { color: var(--fg); text-decoration-color: var(--accent); text-underline-offset: 2px; }
+  code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  code { font-size: .845em; background: var(--code-bg); padding: .1em .35em; border-radius: 3px; word-break: break-word; }
+  pre {
+    background: var(--code-bg); border-left: 2px solid var(--accent);
+    padding: .9rem 1rem; overflow-x: auto; font-size: .78rem; line-height: 1.55; margin: 0 0 1.25rem;
+  }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  ul, ol { padding-left: 1.3rem; margin: 0 0 1rem; }
+  li { margin-bottom: .5rem; }
+  .lede { font-size: 1.06rem; border-left: 2px solid var(--accent); padding-left: 1rem; margin: 0 0 2rem; }
+  .note {
+    background: var(--card); border: 1px solid var(--rule); border-radius: 4px;
+    padding: 1rem 1.15rem; margin: 0 0 1.25rem; font-size: .94rem;
+  }
+  .note strong { color: var(--accent); }
+  .note.trap strong { color: var(--warn); }
+  .tbl-wrap { overflow-x: auto; margin: 0 0 1.25rem; }
+  table { border-collapse: collapse; width: 100%; font-size: .86rem; }
+  th, td { text-align: left; padding: .55rem .7rem; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  th { font-weight: 600; color: var(--muted); font-size: .76rem; text-transform: uppercase; letter-spacing: .06em; }
+  td code { font-size: .82em; }
+  figure { margin: 0 0 1.5rem; }
+  figure svg { width: 100%; height: auto; max-width: 100%; display: block; }
+  figcaption { color: var(--muted); font-size: .84rem; font-style: italic; margin-top: .6rem; }
+  footer { margin-top: 4rem; padding-top: 1.25rem; border-top: 1px solid var(--rule); color: var(--muted); font-size: .85rem; }
+  .toc { background: var(--card); border: 1px solid var(--rule); border-radius: 4px; padding: 1rem 1.25rem; margin: 0 0 2.5rem; font-size: .93rem; }
+  .toc ol { margin: .5rem 0 0; }
+  .toc li { margin-bottom: .35rem; }
+</style>
+</head>
+<body>
+
+<h1>Source to screen</h1>
+<p class="sub">How a retailer's raw file becomes a number on a planning grid.</p>
+
+<p class="lede">
+  The platform is about ninety Databricks jobs arranged in layers, and almost none of
+  the interesting behaviour lives in the job code. It lives in configuration tables —
+  which feeds exist, how to parse them, how to map them, what the hierarchy is. Onboarding
+  a retailer is mostly writing rows, not writing jobs. Understanding that inversion is
+  most of understanding the platform.
+</p>
+
+<div class="toc">
+  <strong>Contents</strong>
+  <ol>
+    <li>The journey — source to bronze to silver to gold, and which store each screen reads</li>
+    <li>Onboarding a retailer — cookbooks and identifier mapping</li>
+    <li>The entity model — product and location hierarchies</li>
+    <li>Gold stock — the demand pipeline and the PVL grain</li>
+  </ol>
+</div>
+
+<h2><span class="n">Part one</span>The journey</h2>
+
+<p>The layers, by job count:</p>
+
+<pre><code>sources/    1   postgres
+bronze/    12   the ingestion chain
+silver/    51   conformed dimensions and facts
+gold/       8   stock, stock_facts_pvl, attribution, size_curve,
+                lost_sale_events, weekly_sales_by_variant_location
+inference/  1   demand
+targets/    2   postgres (serving mirror), freshness (ledger)
+ops/       14   data_quality, cost_attribution_meter, migration_executor, …</code></pre>
+
+<p>
+  The shape is standard medallion — bronze raw, silver conformed, gold computed — with two
+  additions worth noticing. <strong>Silver is enormous relative to everything else</strong>
+  (51 of ~90 jobs), because conforming a retailer's idea of a product to ours is the actual
+  work. And <strong><code>targets/</code> is a layer of its own</strong>: the lakehouse is not
+  what the application reads.
+</p>
+
+<h3>Getting a file in</h3>
+
+<p>
+  Files arrive one of two ways, declared per feed as <code>sourceType</code>:
+  <strong>push</strong> (<code>sftp</code>, <code>fe_upload</code>) or <strong>pull</strong>
+  (<code>bigquery</code>, fetched on a schedule by <code>ingestion_pull_scheduler</code> and
+  <code>ingestion_pull_connector</code>).
+</p>
+
+<p>Once a blob lands, six jobs move it, coordinated entirely through an event log:</p>
+
+<div class="tbl-wrap">
+<table>
+  <thead><tr><th>Job</th><th>Does</th></tr></thead>
+  <tbody>
+    <tr><td><code>ingestion_dispatcher</code></td><td>Streaming orchestrator. Reads new <code>config.pipeline_events</code> rows and fans each out <em>by state</em> to one of three spawned jobs via <code>jobs.run_now</code>. Holds no business logic — no ADLS access, no classification.</td></tr>
+    <tr><td><code>ingestion_classifier</code></td><td>Applies the feed's detection rules, renames the blob from <code>_unclassified/…</code> to a canonical <code>data/…</code> path, writes one <code>detected</code> or <code>failed</code> event.</td></tr>
+    <tr><td><code>ingestion_preprocessor</code></td><td>Downloads archives and extracts inner files to canonical paths. Emits a <code>detected</code> event per inner file.</td></tr>
+    <tr><td><code>ingestion_writer</code></td><td>Header-validates, streams passing files into <code>bronze.raw_data</code>, writes a per-file manifest, emits a terminal state.</td></tr>
+    <tr><td><code>ingestion_merger</code></td><td>Merge handling for change-capture feeds.</td></tr>
+    <tr><td><code>ingestion_state_materializer</code></td><td>Projects the append-only <code>config.pipeline_events</code> log onto <code>config.pipeline_state</code> — one row per <code>originalEventId</code>.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<div class="note">
+  <strong>The design to take away.</strong> The chain is an <em>append-only event log plus a
+  materialised projection</em>, not a set of jobs calling each other. <code>pipeline_events</code>
+  is the history; <code>pipeline_state</code> is the current state per logical file, derived.
+  The dispatcher is deliberately logic-free — it only routes on <code>state</code>. This is why
+  a stuck file is diagnosable: the whole history of what happened to it is a table.
+</div>
+
+<h3>Bronze to silver</h3>
+
+<p>
+  <code>bronze.raw_data</code> holds everything, all columns as strings. A silver job's
+  entire structure is: filter <code>bronze.raw_data</code> to the <code>(orgId, sourceId)</code>
+  pairs its cookbook configures, run the transform chain, write typed rows to its sink.
+  The <code>location_cluster</code> job's README puts it plainly — the pipeline has
+  <em>"no table-specific logic — all mapping lives in the cookbook."</em>
+</p>
+
+<p>That is Part two. For now: silver jobs are thin because the mapping is data.</p>
+
+<h3>Silver to gold, and out</h3>
+
+<p>
+  Gold computes: <code>gold.stock</code> (the demand pipeline, Part four),
+  <code>attribution</code>, <code>size_curve</code>, <code>lost_sale_events</code>.
+  <code>inference/demand</code> fits the forecast. Then <code>targets/postgres</code>
+  mirrors <strong>27 tables</strong> out of the lakehouse into Azure Postgres, and
+  <code>targets/freshness</code> maintains a <code>source_last_updated</code> ledger that
+  drives the "data has moved" surfaces in the product.
+</p>
+
+<h3>So which store does a screen actually read?</h3>
+
+<p>Four answers, and they coexist.</p>
+
+<div class="tbl-wrap">
+<table>
+  <thead><tr><th>Surface</th><th>Reads from</th><th>Via</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><strong>Control plane</strong><br><span style="opacity:.65">config, executions, plan versions, locks</span></td>
+      <td>Azure Postgres</td>
+      <td>Always. Never the lakehouse.</td>
+    </tr>
+    <tr>
+      <td><strong>Report widgets</strong><br><span style="opacity:.65"><code>/widget-data</code></span></td>
+      <td>Azure Postgres — the 27-table mirror</td>
+      <td>ibis expression through <code>query-builder</code>, executed on a pooled backend</td>
+    </tr>
+    <tr>
+      <td><strong>Planning grids</strong><br><span style="opacity:.65"><code>/plan/data</code></span></td>
+      <td>Databricks <code>silver.mfp_facts</code></td>
+      <td>DuckDB reading the Delta files directly by default; SQL warehouse as fallback</td>
+    </tr>
+    <tr>
+      <td><strong>Demand-forecast grids</strong></td>
+      <td>Immutable Parquet tiles in Blob</td>
+      <td>Warmed once cluster-wide, manifest coordinated in Postgres</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<p>
+  The reason for the split is latency versus size. The Postgres mirror exists so ordinary
+  report widgets get an indexed, low-latency, transactional store instead of a warehouse
+  round trip. Planning grids skipped it because the MFP fact is large, is restructured per
+  plan, and is edited — so it gets materialised into a per-replica DuckDB cache instead.
+</p>
+
+<div class="note trap">
+  <strong>This is mid-migration, and it matters.</strong> The Postgres mirror is being
+  decommissioned. <code>targets/freshness</code> exists specifically so the freshness
+  surfaces survive that removal, and its README notes both writers run today —
+  safe only because the ledger upsert is a monotonic <code>GREATEST</code> merge, so two
+  writers observing the same batch converge in any order. If you are reasoning about where
+  data comes from, check which side of that migration the table you care about is on.
+</div>
+
+<h2><span class="n">Part two</span>Onboarding a retailer</h2>
+
+<p>
+  Two configuration tables carry almost all of it:
+  <code>config.source_definition</code> says <em>what a feed is</em>, and
+  <code>config.cookbook</code> says <em>how to turn it into a silver row</em>.
+</p>
+
+<h3>The feed contract — <code>config.source_definition</code></h3>
+
+<p>Sixteen columns. The load-bearing ones:</p>
+
+<div class="tbl-wrap">
+<table>
+  <thead><tr><th>Column</th><th>Meaning</th></tr></thead>
+  <tbody>
+    <tr><td><code>label</code></td><td>Short feed name (<code>sale</code>, <code>poupload</code>). Explicitly <em>"load-bearing, not cosmetic"</em> — it is what a matching detection rule returns and what gets stamped on pipeline events.</td></tr>
+    <tr><td><code>uniqueCols</code></td><td>Ordered source column names forming the feed's natural key. Their values hash into the per-row <code>dataId</code>, <strong>which is the key silver MERGEs on</strong>. The writer raises if it is unset.</td></tr>
+    <tr><td><code>schema</code></td><td>The column contract, as a versioned envelope with a <code>validationMode</code> of <code>shadow</code> or <code>enforce</code> — so a new contract can be observed before it starts rejecting files.</td></tr>
+    <tr><td><code>detectionRules</code></td><td>Ordered rule chain, sorted by level, <strong>first match wins, no IO</strong>. This is how the classifier decides what an arriving file is.</td></tr>
+    <tr><td><code>format</code> / <code>formatOptions</code></td><td>csv / json / avro / parquet, plus reader options discriminated on their own format key. A row where the two disagree is rejected.</td></tr>
+    <tr><td><code>archiveFormat</code></td><td>none / zip / gz / tar.gz / tar.bz2 / <strong>xlsx</strong> — xlsx counts as a container because OOXML <em>is</em> a zip.</td></tr>
+    <tr><td><code>isActive</code></td><td>Read gate. Every bronze stage filters on it, so flipping it false retires a feed without deleting its config.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h3>The cookbook — <code>config.cookbook</code></h3>
+
+<p>
+  A cookbook is not a file. It is <strong>a set of rows, one per transform step</strong>,
+  keyed by <code>(orgId, sourceId, sinkTable, transformGroup, transformOrder)</code>. Each
+  row names a <code>transformType</code> from a closed set — <code>direct</code>,
+  <code>cast</code>, <code>column_map</code>, <code>string_replace</code>,
+  <code>format_string</code>, <code>field_map</code>, <code>conditional</code>,
+  <code>expression</code>, <code>constant</code>, <code>date_transform</code>,
+  <code>split</code>, <code>aggregation</code>, <code>json_parse</code>, … — and carries a
+  JSON <code>transformConfig</code> validated against the Pydantic model registered for that
+  type.
+</p>
+
+<p>Three mechanics that explain most cookbook behaviour:</p>
+
+<ul>
+  <li><strong><code>transformGroup</code> <code>'base'</code> is special-cased.</strong> It runs
+    first against the raw frame. Every other group then runs against the base output
+    independently, and the group results are outer-joined back on <code>(orgId, id)</code>.
+    That is how one feed populates several column families without them interfering.</li>
+  <li><strong><code>transformOutput</code> is a projection whitelist, not documentation.</strong>
+    After a group finishes, the frame is cut to the union of every step's declared outputs plus
+    the framework's passthrough columns. A column you computed but did not declare is
+    <em>dropped</em>.</li>
+  <li><strong><code>transformId</code> is frozen at creation.</strong> Seeded once from the
+    position, then never recomputed — so reordering a chain moves <code>transformOrder</code>
+    and leaves identity alone.</li>
+</ul>
+
+<div class="note trap">
+  <strong>The sharp edge.</strong> <code>transformOrder</code> is applied by sorting rows in
+  Python after they are read, so the table's own row order is irrelevant — but a
+  <em>duplicate</em> order within one group leaves the tie unresolved. Two steps at the same
+  order is a non-deterministic cookbook.
+</div>
+
+<h3>Reconciling identifiers — the mapping tables</h3>
+
+<p>
+  A cookbook parses one file. It cannot know that the retailer's SKU <code>A-1123</code> is
+  last season's <code>A-1098</code> under a new code. That is a separate, customer-declared
+  input: <code>silver.product_mapping</code> and <code>silver.location_mapping</code>.
+</p>
+
+<p>Both carry the same three-valued <code>relationshipType</code>:</p>
+
+<div class="tbl-wrap">
+<table>
+  <thead><tr><th>Type</th><th>Product</th><th>Location</th></tr></thead>
+  <tbody>
+    <tr><td><code>SAME</code></td><td>The two codes are one entity — pooled into a group</td><td>Collapse the two locations into one selling unit</td></tr>
+    <tr><td><code>SIMILAR</code></td><td>The new side borrows the old side's demand as a proxy</td><td>The related location borrows the source location's demand</td></tr>
+    <tr><td><code>REMOVE</code></td><td colspan="2">Retire this pair's prior declaration</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>
+  <code>product_mapping</code> additionally carries a <code>level</code> of
+  <code>'variant'</code> or <code>'product'</code> — whether the assertion is about two SKU
+  codes or two product codes — and resolves both sides to surrogate ids while keeping the
+  raw pair.
+</p>
+
+<p>
+  <code>location_mapping</code> does something worth copying: it keeps
+  <code>sourceLocationCode</code> and <code>relatedLocationCode</code>
+  <strong>verbatim as the customer wrote them</strong>, alongside the resolved ids, so the
+  declaration <em>"stays reportable and auditable against their location master"</em>. When a
+  customer disputes a mapping you can show them their own codes, not our hashes.
+</p>
+
+<p>
+  The payoff lands in gold: <code>gold.stock</code> pools variants sharing a
+  <code>variant_group_member.groupId</code> and pools SAME-mapped stores, so a style that
+  changed code mid-season has one continuous demand history rather than two truncated ones.
+</p>
+
+<h2><span class="n">Part three</span>The entity model</h2>
+
+<h3>Keys first</h3>
+
+<p>Every entity id in the platform is the same construction:</p>
+
+<pre><code>id = sha256( org's configured source columns joined by '|' )</code></pre>
+
+<p>
+  A hash, not a UUID. Two consequences follow and both bite. First, the hash inputs are
+  <em>per-org cookbook configuration</em> — a style/colour code for one retailer, an article
+  number for another. Second, <strong>most orgs omit <code>orgId</code> from the hash
+  inputs</strong>, so the value is unique only within an org and the real key is
+  <code>(orgId, id)</code>. Any join or uniqueness assumption on <code>id</code> alone is a
+  latent cross-tenant bug.
+</p>
+
+<p>
+  The upside is that ids are reproducible: re-ingesting the same source row yields the same
+  id without a lookup, which is what makes idempotent MERGE possible at this scale.
+</p>
+
+<h3>Product — hierarchy is derived from attributes</h3>
+
+<p>
+  <code>silver.product</code> is deliberately thin: 9 columns, of which the interesting one is
+  <code>attributes</code> — a JSON object whose <em>key set is per-org and per-feed</em>, with
+  no fixed shape. <code>silver.product_variant</code> hangs off it with a
+  <code>variant</code> JSON holding the distinguishing axes (size, colour, and org-specific
+  ones like shape or material).
+</p>
+
+<p>
+  The hierarchy is not columns on the product. It is computed, across four tables:
+</p>
+
+<div class="tbl-wrap">
+<table>
+  <thead><tr><th>Table</th><th>Role</th></tr></thead>
+  <tbody>
+    <tr><td><code>config.product_hierarchy_level</code></td><td>Registers the org's levels as <code>fieldId</code>s</td></tr>
+    <tr><td><code>config.product_hierarchy_closure</code></td><td>The level ordering — root chain and depths</td></tr>
+    <tr><td><code>silver.product_hierarchy_node</code></td><td>One row per distinct node. <code>attributes</code> is the node's <em>full path</em> as JSON; <code>id</code> hashes that path</td></tr>
+    <tr><td><code>silver.product_node_relation</code></td><td>Places each product at each depth — <code>productId</code> → <code>nodeId</code>, with <code>nodeLevel</code> and <code>nodeDepth</code></td></tr>
+  </tbody>
+</table>
+</div>
+
+<div class="note trap">
+  <strong>The failure mode to internalise.</strong> <code>product_node_relation</code> decodes
+  <code>product.attributes</code> as <code>map&lt;string,string&gt;</code> and looks up each
+  registered hierarchy field id. <strong>A product whose attributes lack a registered field id
+  yields no hierarchy node at that level.</strong> Not an error, not a NULL row — the product
+  is simply absent from that level of every rollup. The contract "the org's registered
+  hierarchy field ids must appear as keys in <code>attributes</code>" is enforced by the
+  cookbook being written correctly, and by nothing else.
+</div>
+
+<h3>Location — hierarchy is declared as edges</h3>
+
+<p>
+  <code>silver.location</code> carries 12 columns, with the same per-org <code>attributes</code>
+  JSON, plus a few things promoted into real columns because they are queried:
+  <code>geo</code> (a lat/long struct), <code>countryCode</code>, <code>isActive</code>, and
+  <code>typeId</code> pointing at <code>config.location_type</code> — which is where
+  <code>isSelling</code> lives, distinguishing a store from a DC.
+</p>
+
+<p>Structure is expressed as edges, not attributes:</p>
+
+<ul>
+  <li><strong><code>location_relation</code></strong> — <code>parentId</code> is the
+    <em>supplying</em> side (warehouse, DC, store-owned box), <code>childId</code> the
+    <em>served</em> store. These are supply edges, not geography.</li>
+  <li><strong><code>location_closure</code></strong> — the transitive closure:
+    <code>ancestorId</code>, <code>descendantId</code>, <code>depth</code>. Note the
+    <code>type</code> column: <strong>two different edge sets share this table</strong> and are
+    discriminated by it. Querying the closure without filtering <code>type</code> silently
+    unions two unrelated graphs.</li>
+  <li><strong><code>location_cluster</code></strong> — grouping for planning, with its own
+    attributes.</li>
+</ul>
+
+<div class="note">
+  <strong>The asymmetry is the insight.</strong> The product hierarchy is
+  <em>attribute-derived</em> — nodes are computed by reading values out of a JSON blob. The
+  location hierarchy is <em>edge-declared</em> — relations are stated, then a closure is built.
+  They are modelled in genuinely different ways, so intuitions do not transfer. A product
+  moves levels by its attributes changing; a location moves by an edge being rewritten.
+</div>
+
+<h2><span class="n">Part four</span>Gold stock</h2>
+
+<p>
+  <code>gold.stock</code> is the demand pipeline behind replenishment and planning, and it is
+  the highest-defect job family in the repo. Worth knowing why before touching it.
+</p>
+
+<h3>Why it needs its own job</h3>
+
+<p>
+  Because it is not a view — it is a <strong>materialised multi-grain cube</strong>. Thirty-two
+  columns, and a <code>level</code> discriminator deciding which dimension columns are
+  populated on a given row: <code>product_variant_location</code>, <code>product_variant</code>,
+  <code>product</code>, <code>product_hierarchy</code>, <code>location</code>,
+  <code>overall</code>. Dimension columns are NULL at levels that do not carry them, and
+  <em>different producers write different levels</em> — the forecast writes
+  overall / location / product_hierarchy; the rolldown phases write the finer grains.
+</p>
+
+<p>The metrics come in regime triples — full-price, markdown, and net:</p>
+
+<pre><code>sold      fpSold      mdSold      netSold
+price     —           mdPrice     netPrice
+cost      —           mdCost      netCost
+inventory —           mdInventory netInventory
+demand    fpDemand    mdDemand    netDemand
+
+adjustedSold     — sold after stock-out censoring (full-price leg only)
+adjustedDemand   — demand after the EP constraint is applied
+lostSale         — sum of gold.lost_sale_events units, with reason codes</code></pre>
+
+<p>
+  An org with no markdown feed has the markdown leg absent and net equal to the base — which
+  is why so many of these columns read "a missing markdown leg counting as zero".
+</p>
+
+<h3>The v1 pipeline</h3>
+
+<div class="tbl-wrap">
+<table>
+  <thead><tr><th>Phase</th><th>Does</th></tr></thead>
+  <tbody>
+    <tr><td>1 · foundation</td><td>inventory/sales, product availability, interpolation</td></tr>
+    <tr><td>2 · enrichment</td><td>adjusted sales, multi-level aggregates</td></tr>
+    <tr><td>4a/4b · rolldown</td><td>product and product-location demand rolldown</td></tr>
+    <tr><td>5 · variant</td><td>product-location demand → PVL via clamped historical proportions</td></tr>
+    <tr><td>6 · ep_constraint</td><td>fan constraints out to PVL, distribute by largest remainder, aggregate back up in one MERGE</td></tr>
+    <tr><td>lost_sales</td><td>aggregate <code>gold.lost_sale_events</code> per PVL/date onto <code>gold.stock</code></td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>
+  <strong>All communication between phases goes through Delta tables</strong> — never an
+  in-memory handoff. And no phase applies its own lookback or cap: a shared context builds the
+  cutoff config, because a phase that re-derives its own window will disagree with the merge
+  predicate.
+</p>
+
+<h3>PVL, and why v2 splits it out</h3>
+
+<p>
+  PVL is product–variant–location, the finest grain in the system. <code>gold.stock_facts_pvl</code>
+  is v2 Step 1, shipped and running alongside v1. Where <code>gold.stock</code> is 32 columns
+  across six levels, <code>stock_facts_pvl</code> is 13 columns at exactly one grain — and its
+  column comments state the design directly: variant is <em>"raw variant grain; same-SKU
+  grouping is deferred to rolldown"</em>, location likewise.
+</p>
+
+<p>
+  That is the whole point of the split. <strong>v1 pools SAME-mapped SKUs and stores at the
+  foundation, before anything else happens. v2 keeps facts at raw grain and defers pooling
+  downstream.</strong> Facts stay facts; the opinionated part moves later.
+</p>
+
+<p>The other reason it is a separate table is a hard invariant:</p>
+
+<div class="note">
+  <strong>A pipeline step must never write into a table it also listens to.</strong> Its own
+  writes would re-trigger it. Each step writes to its own table — that is what keeps the
+  change-propagation DAG acyclic, and it is exactly why <code>stock_facts_pvl</code> is separate
+  from everything downstream.
+</div>
+
+<p>
+  Later v2 steps (<code>stock_agg</code>, <code>stock_enriched</code>, <code>stock_demand</code>,
+  <code>stock_v2</code>) are designed but <strong>not built</strong>. Those tables do not exist;
+  do not write code against them.
+</p>
+
+<h3>Where this pipeline actually breaks</h3>
+
+<p>
+  Every one of these is a real review finding, and they generalise well beyond this codebase.
+</p>
+
+<h4>Pool arithmetic</h4>
+<ul>
+  <li><strong>An aggregate over a pool is not safe until you have decided what a non-positive
+    total means.</strong> NULL, zero and negative are three different cases; collapsing them
+    into one <code>otherwise</code> branch silently mis-allocates the entire pool.</li>
+  <li>Clamp pool aggregates at zero — one negative row can drive a sum ≤ 0 and set
+    <code>scaleFactor = 0</code> for the whole pool, not just that row.</li>
+  <li>Largest-remainder distribution needs a deterministic tie-break, or allocation is not
+    reproducible run to run.</li>
+</ul>
+
+<h4>Join semantics decide whether rows vanish</h4>
+<ul>
+  <li>An <strong>INNER</strong> join in a fan-out drops the unmatched side — so a
+    <code>WHEN MATCHED</code> MERGE then leaves stale values in place, and removing a constraint
+    appears to do nothing.</li>
+  <li>A <strong>LEFT</strong> join writes NULL for the unmatched side unless you coalesce back
+    to the original.</li>
+  <li>An unconditional inner join against an <em>optional</em> dimension deletes data for every
+    org that does not use it.</li>
+</ul>
+
+<h4>Borrowing must not carry the donor's grain</h4>
+<p>
+  When a recipient borrows a donor's history, carry the <em>recipient's</em>
+  <code>productId</code> and <code>locationId</code>. A donor with history at a location the
+  recipient never trades at produces a phantom row there — and the <code>left_anti</code>
+  replacement will not remove it, so it persists.
+</p>
+
+<h4>Ordering in CDF writers</h4>
+<p>
+  Write facts <em>before</em> the watermark. A watermark MERGE that commits first leaves
+  <code>lastDataDate</code> ahead of the data, and downstream reads an incomplete horizon as
+  complete — which is the worst class of bug here, because nothing errors.
+</p>
+
+<h2><span class="n">Closing</span>The shape of it</h2>
+
+<p>If there is one thing to carry away from all four parts, it is this:</p>
+
+<ul>
+  <li><strong>Behaviour is configuration.</strong> Feeds, parsing, mapping, hierarchy levels —
+    all rows in <code>config.*</code>. Silver jobs are thin on purpose.</li>
+  <li><strong>Identity is a hash, scoped by org.</strong> <code>(orgId, id)</code> is the key,
+    always.</li>
+  <li><strong>Product and location are modelled differently</strong> — derived from attributes
+    versus declared as edges — and neither intuition transfers to the other.</li>
+  <li><strong>The lakehouse is not what the app reads</strong>, except where it deliberately is,
+    and that boundary is actively moving.</li>
+  <li><strong>The dangerous failures here are silent</strong>: a missing attribute key, an INNER
+    join, an unclamped pool, a watermark written early. None of them raise.</li>
+</ul>
+
+<footer>
+  <p>
+    Written against <code>databricks/jobs</code>, <code>common/python/databricks/schema</code>
+    and <code>services/report-builder</code> as of September 2026. Column semantics are quoted
+    from the schema tables' own comment metadata, which is the authoritative description of
+    each field. Two pipelines are mid-migration as of writing — the Postgres serving mirror and
+    gold stock v1/v2 — so verify which side of each a given table sits on before relying on it.
+  </p>
+  <p>Companion piece: <a href="/learning/backend-report-data-flow/">How a report becomes pixels</a>, which picks up where this ends.</p>
+</footer>
+
+</body>
+</html>
