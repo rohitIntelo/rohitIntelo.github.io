@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Trusting the numbers — how data quality is monitored</title>
+<meta name="description" content="The data_quality job: five lanes, generated checks, the cookbook validator, and a ratchet that makes existing debt visible without blocking.">
+<style>
+  :root {
+    --bg: #fdfdfc; --fg: #1a1a18; --muted: #6b6b66; --rule: #d8d8d2;
+    --accent: #6a4a8f; --code-bg: #f3f2ee; --card: #f8f7f4; --warn: #8a5a2b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #16161a; --fg: #e6e6e2; --muted: #9a9a94; --rule: #32323a;
+      --accent: #b39ad6; --code-bg: #1f1f25; --card: #1c1c22; --warn: #d6a06a;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--bg); color: var(--fg); }
+  body {
+    max-width: 47rem; margin: 0 auto;
+    padding-block: 3.5rem 5rem; padding-left: 1.25rem; padding-right: 1.25rem;
+    font: 17px/1.65 Georgia, 'Iowan Old Style', 'Times New Roman', serif;
+    -webkit-text-size-adjust: 100%;
+  }
+  h1 { font-size: 1.9rem; line-height: 1.18; font-weight: normal; margin: 0 0 .4rem; letter-spacing: -.01em; }
+  .sub { color: var(--muted); font-style: italic; margin: 0 0 2rem; }
+  h2 {
+    font-size: 1.3rem; font-weight: normal; margin: 3.25rem 0 .75rem;
+    padding-top: 1.25rem; border-top: 1px solid var(--rule); letter-spacing: -.01em;
+  }
+  h2 .n {
+    font: 600 .7rem/1 ui-monospace, Menlo, monospace; color: var(--accent);
+    letter-spacing: .12em; display: block; margin-bottom: .5rem; text-transform: uppercase;
+  }
+  h3 { font-size: 1.04rem; font-weight: 600; margin: 1.9rem 0 .4rem; }
+  p { margin: 0 0 1rem; }
+  a { color: var(--fg); text-decoration-color: var(--accent); text-underline-offset: 2px; }
+  code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  code { font-size: .845em; background: var(--code-bg); padding: .1em .35em; border-radius: 3px; word-break: break-word; }
+  pre {
+    background: var(--code-bg); border-left: 2px solid var(--accent);
+    padding: .9rem 1rem; overflow-x: auto; font-size: .78rem; line-height: 1.55; margin: 0 0 1.25rem;
+  }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  ul, ol { padding-left: 1.3rem; margin: 0 0 1rem; }
+  li { margin-bottom: .5rem; }
+  .lede { font-size: 1.06rem; border-left: 2px solid var(--accent); padding-left: 1rem; margin: 0 0 2rem; }
+  .note {
+    background: var(--card); border: 1px solid var(--rule); border-radius: 4px;
+    padding: 1rem 1.15rem; margin: 0 0 1.25rem; font-size: .94rem;
+  }
+  .note strong { color: var(--accent); }
+  .note.trap strong { color: var(--warn); }
+  .tbl-wrap { overflow-x: auto; margin: 0 0 1.25rem; }
+  table { border-collapse: collapse; width: 100%; font-size: .86rem; }
+  th, td { text-align: left; padding: .55rem .7rem; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  th { font-weight: 600; color: var(--muted); font-size: .76rem; text-transform: uppercase; letter-spacing: .06em; }
+  td code { font-size: .82em; }
+  blockquote {
+    margin: 0 0 1.25rem; padding-left: 1rem; border-left: 2px solid var(--rule);
+    color: var(--muted); font-style: italic;
+  }
+  footer { margin-top: 4rem; padding-top: 1.25rem; border-top: 1px solid var(--rule); color: var(--muted); font-size: .85rem; }
+</style>
+</head>
+<body>
+
+<h1>Trusting the numbers</h1>
+<p class="sub">How data quality is monitored across the lakehouse and its serving copy.</p>
+
+<p class="lede">
+  Most data-quality systems answer "is this table wrong?". This one is built around a
+  harder question: <em>"is there anything we failed to check, and would we know?"</em>
+  Nearly every design decision in it follows from refusing to let a check silently not run.
+</p>
+
+<h2><span class="n">01 · Shape</span>Five lanes</h2>
+
+<p>
+  <code>ops/data_quality</code> runs as a four-slot composite workflow —
+  <code>global</code>, then <code>databricks</code> and <code>postgres</code> in parallel,
+  then <code>cross_lane</code> — with a fifth <code>cookbook</code> lane validating the
+  transform chains themselves.
+</p>
+
+<div class="tbl-wrap">
+<table>
+  <thead><tr><th>Lane</th><th>Checks</th></tr></thead>
+  <tbody>
+    <tr><td><code>global</code></td><td>Org-agnostic checks (<code>org_id='*'</code>). Cross-org collision detection and the surrogate-key lint. <strong>Aborts the workflow if <code>config.active_orgs</code> is empty</strong> rather than fanning out to nothing.</td></tr>
+    <tr><td><code>databricks</code></td><td>DQX-driven Spark checks against silver and gold, fanned out per org.</td></tr>
+    <tr><td><code>postgres</code></td><td>The same checks against the Postgres serving copy, via SQL templates.</td></tr>
+    <tr><td><code>cross_lane</code></td><td>Count, sum and sync-lag <em>parity</em> between Databricks and Postgres — does the mirror agree with its source?</td></tr>
+    <tr><td><code>cookbook</code></td><td>Validates the transform chains in <code>config.cookbook</code>: static taxonomy checks plus data probes.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>
+  Results land in two Delta tables — <code>ops.data_quality_runs</code> and
+  <code>ops.data_quality_results</code> — written by a MERGE keyed on
+  <code>(run_id, check_id)</code>, so a retried org worker is idempotent rather than
+  duplicating rows.
+</p>
+
+<h2><span class="n">02 · Coverage</span>Checks are generated, not remembered</h2>
+
+<p>
+  The most interesting decision in the job is that most checks are not hand-authored. The
+  module that generates them states the reasoning in one line:
+</p>
+
+<blockquote>
+  A hand-authored rule covers the table someone remembered.
+</blockquote>
+
+<p>
+  So targets come from <code>information_schema</code> and an entity registry instead.
+  Generated and hand-authored checks produce <em>the same</em> <code>RuleFile</code> object
+  on the same code path, so nothing downstream knows the difference.
+</p>
+
+<p>
+  The generated families are <code>gen_fk_*</code>, <code>gen_partial_key_*</code>,
+  <code>gen_unique_*</code> and <code>xorg_collision_*</code>. Hand-authored rules still
+  exist for the domain-specific cases, as YAML:
+</p>
+
+<pre><code>table: data-{env}.silver.cost_rate
+checks:
+- id: cbv_cost_rate_id_unique
+  type: is_unique
+  column: id
+  impacted_services:
+  - service: _unowned
+    severity: critical</code></pre>
+
+<div class="note">
+  <strong>The registry gate runs first, and is allowed to fail the run.</strong> If the
+  entity registry under-covers the catalog, generation would emit fewer checks than the data
+  warrants — with nothing naming what was missed. That is described as
+  <em>"exactly the silent skip this job exists to reject"</em>, so an unregistered column
+  propagates as an error instead of quietly shrinking coverage.
+</div>
+
+<h2><span class="n">03 · Controls</span>Preventive and detective, in pairs</h2>
+
+<p>
+  The clearest illustration of the design is a pair of checks on the same failure — surrogate
+  key collision across tenants.
+</p>
+
+<p>Recall how ids are built:</p>
+
+<pre><code>id = sha2(concat_ws('|', sourceColumns), 256)</code></pre>
+
+<p>
+  If an org's <code>sourceColumns</code> omits an org discriminator, two tenants whose source
+  systems emit the same natural key get <strong>the same id</strong>. An org-blind join then
+  attaches the wrong tenant's row.
+</p>
+
+<div class="tbl-wrap">
+<table>
+  <thead><tr><th></th><th><code>surrogate_org_lint</code></th><th><code>cross_org_collision</code></th></tr></thead>
+  <tbody>
+    <tr><td><strong>Type</strong></td><td>Preventive</td><td>Detective</td></tr>
+    <tr><td><strong>Reads</strong></td><td><code>config.cookbook</code> — the generator config</td><td>The ids already written</td></tr>
+    <tr><td><strong>Fires</strong></td><td>Before the colliding row exists</td><td>After it exists</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>
+  Both live on the global lane, and the reason why is the sharp bit:
+  <strong>the per-org lane cannot see this class of bug at all.</strong> The databricks lane
+  filters <code>orgId</code> before every check, so <code>is_unique</code> on
+  <code>(orgId, id)</code> passes by construction and a key spanning tenants is invisible.
+  The module notes this was proven by seeding a collision into the local lane and confirming
+  it went undetected.
+</p>
+
+<div class="note">
+  <strong>Worth generalising.</strong> A check scoped the same way as your data cannot detect
+  a violation of that scope. If every query filters by tenant, no per-tenant check will ever
+  find a cross-tenant leak.
+</div>
+
+<h2><span class="n">04 · The cookbook lane</span>Testing logic that lives in a table</h2>
+
+<p>
+  Because the transform logic of every Shape A silver job lives in <code>config.cookbook</code>
+  rather than in job code, its test suite lives here rather than in the job packages — which
+  carry registration tests only. Two tiers share one check engine.
+</p>
+
+<h3>Static tier — config-pure</h3>
+<p>
+  Taxonomy checks over live <code>config.cookbook</code> rows, with hash-based change
+  attribution so a finding names the chain, the check <em>and</em> the
+  <code>transformId</code> that introduced it. Families that cannot run for a chain — no
+  <code>source_definition</code>, no schema module — are <em>"reported as inapplicable in the
+  coverage record rather than silently skipped."</em>
+</p>
+
+<h3>Probe tier — data-dependent</h3>
+<p>
+  The Spark half, running self-consistent goldens incrementally off the change feed daily and
+  full dimension-uniqueness scans on Sundays. Same contract: a probe that cannot run yields
+  an error or inapplicable row, <strong>never an absent one</strong>.
+</p>
+
+<p>The dimension-uniqueness probe is quietly clever:</p>
+
+<blockquote>
+  For every parseable equi-join, the dimension must be unique on its join key at real data.
+  For an equi-join against a unique key a left join cannot fan out, so this is also the
+  join-explosion guard; an unparseable condition is reported as unverifiable rather than
+  skipped.
+</blockquote>
+
+<p>
+  One check, two guarantees — correctness of the dimension and absence of accidental fan-out.
+  And an unparseable join condition is a <em>reported state</em>, not a gap.
+</p>
+
+<h3>How it is actually used</h3>
+<pre><code>dbdev cookbook validate                        # whole corpus vs the committed snapshot
+dbdev cookbook validate --sink sale --org 550b # one feed, full findings, exit 1 on error
+dbdev cookbook pull && dbdev cookbook accept   # refresh snapshot + baseline
+dbdev cookbook rules                           # regenerate probe rules
+dbdev cookbook test                            # the CI ratchet suite, locally</code></pre>
+
+<p>
+  <code>pull</code> + <code>accept</code> is <strong>required in any PR that changes cookbook
+  rows</strong> — a freshness gate in <code>pr-checks</code> enforces it.
+</p>
+
+<h2><span class="n">05 · Failure</span>What "failed" actually means</h2>
+
+<p>
+  This is the part that makes the job usable on a real codebase rather than permanently red.
+</p>
+
+<p>
+  The generated check families report <em>the debt already in the data</em>. Turned on naively,
+  every run fails forever and the signal is worthless. So there is a ratchet: a run closes
+  <code>failed</code> only on a finding <strong>absent from <code>accepted_baseline.json</code></strong>.
+</p>
+
+<pre><code>{"accepted": [
+  {"lane": "databricks", "org_id": "&lt;org&gt;",
+   "check_id": "gen_partial_key_silver_sale",
+   "accepted_on": "2026-09-04",
+   "reason": "why this is carried, not fixed"}
+]}</code></pre>
+
+<p>Four properties of that file are worth copying wholesale:</p>
+
+<ul>
+  <li><strong>An accepted finding is still written as <code>fail</code> with its count.</strong>
+    Accepting changes the run's verdict, not the record. The debt stays measurable.</li>
+  <li><strong><code>accepted_on</code> and <code>reason</code> are required</strong> — enforced
+    as a loader error, not a lint. You cannot accept something without dating and justifying it.</li>
+  <li><strong>No run path writes the file.</strong> Accepting is a reviewed commit, never
+    something a job does to itself.</li>
+  <li><strong>Each run reports on the baseline itself</strong>: <code>baseline_new</code> for
+    what fired, <code>baseline_stale</code> for an entry whose check now passes, and
+    <code>baseline_unresolvable</code> for one naming a check that no longer exists.</li>
+</ul>
+
+<div class="note">
+  <strong>That third bullet is the load-bearing one.</strong> A baseline a job can rewrite is a
+  baseline that quietly absorbs every new failure. Making acceptance a human commit is what
+  keeps the ratchet a ratchet.
+</div>
+
+<h3>Severity and routing</h3>
+
+<p>
+  Severity is <code>info &lt; warn &lt; error &lt; critical</code>, and it is a property of
+  <em>who is affected</em>, not of the check. Each rule declares
+  <code>impacted_services</code>, each with its own severity; the effective severity of a
+  result row is the maximum across them. <code>_unowned</code> is the synthetic service for
+  ops-only tables, routing to ops alone.
+</p>
+
+<p>
+  A week-1 policy caps everything at <code>warn</code> — applied <strong>at write time</strong>,
+  deliberately, so that lifting the cap later does not retroactively change historical rows and
+  break trend panels.
+</p>
+
+<h2><span class="n">06 · Triage</span>Ordering findings by cost</h2>
+
+<p>
+  A validator that emits two hundred findings has just moved the problem. The triage module
+  orders them <em>"by what they cost, not what they are called"</em>, on two axes:
+</p>
+
+<ul>
+  <li><strong>Certainty</strong> — damage happening deterministically on every row today
+    outranks damage waiting on a bad input value. A NULL that is recomputable after a fix still
+    outranks a latent defect, because the latent one has cost nothing yet.</li>
+  <li><strong>Repairability</strong> — silent re-keying is permanent (<em>a MERGE cannot
+    un-duplicate</em>), so latent identity corruption outranks latent batch failure, which is
+    loud and leaves the data intact.</li>
+</ul>
+
+<p>
+  The second axis is the non-obvious one. It ranks a <em>quiet</em> problem above a
+  <em>loud</em> one, because loudness is a form of safety: a job that crashes has not corrupted
+  anything.
+</p>
+
+<h2><span class="n">07 · Parity</span>Two lanes, one answer</h2>
+
+<p>
+  The Databricks and Postgres lanes must agree, which is harder than it sounds. A worked
+  example from the README, on <code>is_in_set</code> and NULL:
+</p>
+
+<p>
+  SQL three-valued logic means <code>col NOT IN (…)</code> treats NULL as passing. An interim
+  revision "fixed" this on the Postgres lane by rewriting it so NULL counted as a violation —
+  which made the same rule produce <em>different counts on the two lanes</em>. That was
+  reverted. The current predicate is <code>col IS NOT NULL AND col NOT IN (…)</code>, so NULL
+  passes on both, matching DQX's default on the Databricks side.
+</p>
+
+<div class="note trap">
+  <strong>The lesson is not about NULLs.</strong> When two engines implement the same rule,
+  agreeing with each other beats either one being independently more correct — because parity
+  checks compare their outputs, and a divergence shows up as a data problem that isn't one.
+  The behaviour is now pinned by a test whose fixture has one NULL row and one genuinely
+  out-of-set row, asserting a failing count of exactly 1.
+</div>
+
+<h2><span class="n">Closing</span>One principle, applied everywhere</h2>
+
+<p>Every part of this job is the same idea in a different costume:</p>
+
+<ul>
+  <li>Checks are <strong>generated from the catalog</strong>, because memory under-covers.</li>
+  <li>The registry gate <strong>fails the run</strong> rather than emitting fewer checks.</li>
+  <li>An inapplicable check is <strong>recorded as inapplicable</strong>, not omitted.</li>
+  <li>An unparseable join is <strong>reported as unverifiable</strong>, not skipped.</li>
+  <li>The global lane exists because a per-org check <strong>cannot see cross-org bugs</strong>.</li>
+  <li>The global lane <strong>aborts on an empty org list</strong> instead of passing vacuously.</li>
+  <li>Accepted findings are <strong>still written as failures</strong>, with a date and a reason.</li>
+</ul>
+
+<p>
+  A passing run here is not "we found nothing". It is "we ran everything we could name, and
+  everything we could not run is written down". That is a meaningfully stronger claim, and it
+  is the one worth building toward in any monitoring system.
+</p>
+
+<footer>
+  <p>
+    Written against <code>databricks/jobs/ops/data_quality</code> as of September 2026.
+    Quoted phrases are from the job's own module docstrings and README. Operator guide: the
+    <code>validate-cookbooks</code> skill. The design doc referenced by the README is
+    <code>docs/superpowers/specs/2026-05-22-databricks-data-quality-monitoring-design.md</code>.
+  </p>
+  <p>
+    Related: <a href="/research/data-platform-source-to-screen/">Source to screen</a> (Part two
+    covers what a cookbook is) · <a href="/learning/backend-report-data-flow/">How a report becomes pixels</a>.
+  </p>
+</footer>
+
+</body>
+</html>
