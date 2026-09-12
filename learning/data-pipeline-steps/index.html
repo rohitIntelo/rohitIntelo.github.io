@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>From file to grid — the pipeline in fifteen steps</title>
+<meta name="description" content="A step-by-step map of the retail data pipeline, naming what physically moves between each stage.">
+<style>
+  :root {
+    --bg: #fdfdfc; --fg: #1a1a18; --muted: #6b6b66; --rule: #d8d8d2;
+    --accent: #1f6f8b; --code-bg: #f3f2ee; --card: #f8f7f4; --warn: #8a5a2b;
+    --stage-bronze: #a9713c; --stage-silver: #6b7b8c; --stage-gold: #9a7b28;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #16161a; --fg: #e6e6e2; --muted: #9a9a94; --rule: #32323a;
+      --accent: #6fb6cf; --code-bg: #1f1f25; --card: #1c1c22; --warn: #d6a06a;
+      --stage-bronze: #cf9d69; --stage-silver: #a9b8c7; --stage-gold: #d4b45c;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--bg); color: var(--fg); }
+  body {
+    max-width: 46rem; margin: 0 auto;
+    padding-block: 3.5rem 5rem; padding-left: 1.25rem; padding-right: 1.25rem;
+    font: 17px/1.65 Georgia, 'Iowan Old Style', 'Times New Roman', serif;
+    -webkit-text-size-adjust: 100%;
+  }
+  h1 { font-size: 1.85rem; line-height: 1.18; font-weight: normal; margin: 0 0 .4rem; letter-spacing: -.01em; }
+  .sub { color: var(--muted); font-style: italic; margin: 0 0 2rem; }
+  p { margin: 0 0 1rem; }
+  a { color: var(--fg); text-decoration-color: var(--accent); text-underline-offset: 2px; }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+         font-size: .84em; background: var(--code-bg); padding: .1em .35em; border-radius: 3px; word-break: break-word; }
+  .lede { font-size: 1.05rem; border-left: 2px solid var(--accent); padding-left: 1rem; margin: 0 0 2.5rem; }
+
+  .stage {
+    margin: 2.75rem 0 1.5rem; padding-top: 1rem; border-top: 1px solid var(--rule);
+    display: flex; align-items: baseline; gap: .75rem; flex-wrap: wrap;
+  }
+  .stage h2 { font-size: 1.15rem; font-weight: normal; margin: 0; letter-spacing: -.01em; }
+  .stage .tag {
+    font: 600 .68rem/1 ui-monospace, Menlo, monospace; letter-spacing: .11em;
+    text-transform: uppercase; padding: .3em .55em; border-radius: 3px;
+    border: 1px solid currentColor;
+  }
+  .tag.cfg { color: var(--accent); }
+  .tag.bronze { color: var(--stage-bronze); }
+  .tag.silver { color: var(--stage-silver); }
+  .tag.gold { color: var(--stage-gold); }
+  .tag.serve { color: var(--accent); }
+
+  ol.steps { list-style: none; padding: 0; margin: 0; }
+  ol.steps > li {
+    position: relative; padding-left: 2.6rem; margin-bottom: 1.5rem;
+  }
+  ol.steps > li::before {
+    content: attr(data-n);
+    position: absolute; left: 0; top: .1em;
+    font: 600 .78rem/1.55 ui-monospace, Menlo, monospace;
+    width: 1.75rem; height: 1.75rem; text-align: center;
+    border: 1px solid var(--rule); border-radius: 50%;
+    color: var(--muted); background: var(--card);
+  }
+  ol.steps .what { font-weight: 600; display: block; margin-bottom: .15rem; }
+  ol.steps .detail { color: var(--muted); font-size: .93rem; display: block; margin-bottom: .35rem; }
+  ol.steps .moves {
+    display: block; font-size: .89rem; padding-left: .8rem;
+    border-left: 2px solid var(--accent); color: var(--fg);
+  }
+  ol.steps .moves b { font-weight: 600; color: var(--accent); font-style: normal; }
+
+  .note {
+    background: var(--card); border: 1px solid var(--rule); border-radius: 4px;
+    padding: 1rem 1.15rem; margin: 1.25rem 0; font-size: .93rem;
+  }
+  .note strong { color: var(--accent); }
+  .note.trap strong { color: var(--warn); }
+  .alongside {
+    margin: 3rem 0 0; padding: 1rem 1.15rem; border: 1px dashed var(--rule);
+    border-radius: 4px; font-size: .93rem;
+  }
+  h3 { font-size: 1.02rem; font-weight: 600; margin: 2.5rem 0 .5rem; }
+  ul { padding-left: 1.3rem; } li { margin-bottom: .5rem; }
+  footer { margin-top: 3.5rem; padding-top: 1.25rem; border-top: 1px solid var(--rule); color: var(--muted); font-size: .85rem; }
+</style>
+</head>
+<body>
+
+<h1>From file to grid</h1>
+<p class="sub">The retail data pipeline in fifteen steps.</p>
+
+<p class="lede">
+  A map, not a manual. Each step names <strong>what physically moves</strong> to the next
+  one — because the handoffs are what the pipeline actually is, and they are the part
+  that is hard to reconstruct from any single job's code.
+</p>
+
+<div class="stage"><span class="tag cfg">Step 0</span><h2>Before any data exists</h2></div>
+
+<ol class="steps">
+  <li data-n="0">
+    <span class="what">Register the feed</span>
+    <span class="detail"><code>config.source_definition</code> says what the file is — its natural key, column contract, format, archive wrapper, and the detection rules that recognise it. <code>config.cookbook</code> says how to map it, as one row per transform step.</span>
+    <span class="moves">→ <b>Nothing runs until these rows exist.</b> No code is written to onboard a retailer.</span>
+  </li>
+</ol>
+
+<div class="stage"><span class="tag bronze">Bronze</span><h2>Getting it in</h2></div>
+
+<ol class="steps">
+  <li data-n="1">
+    <span class="what">File arrives</span>
+    <span class="detail">Push (<code>sftp</code>, <code>fe_upload</code>) or pull (<code>bigquery</code>, fetched on a schedule).</span>
+    <span class="moves">→ a blob in ADLS under <b>_unclassified/…</b></span>
+  </li>
+  <li data-n="2">
+    <span class="what">Classify</span>
+    <span class="detail">The feed's detection rules run in order; first match wins, no IO.</span>
+    <span class="moves">→ blob renamed to canonical <b>data/…</b>, plus a <b>detected</b> event</span>
+  </li>
+  <li data-n="3">
+    <span class="what">Preprocess, if wrapped</span>
+    <span class="detail">Unwrap zip / gz / tar.gz / xlsx. (xlsx counts as an archive — OOXML is a zip.)</span>
+    <span class="moves">→ inner files at canonical paths, one <b>detected</b> event each</span>
+  </li>
+  <li data-n="4">
+    <span class="what">Write</span>
+    <span class="detail">Header-validate, then stream the passing files in.</span>
+    <span class="moves">→ rows in <b>bronze.raw_data</b> — every column a string, each row carrying <b>dataId = hash(uniqueCols)</b></span>
+  </li>
+</ol>
+
+<div class="note">
+  <strong>Steps 1–4 coordinate through a log, not through calls.</strong> Every stage appends
+  to <code>config.pipeline_events</code>; the dispatcher routes purely on <code>state</code>
+  and holds no business logic; <code>state_materializer</code> projects the log onto
+  <code>config.pipeline_state</code>, one row per file. This is why a stuck file is
+  diagnosable — its entire history is a table.
+</div>
+
+<div class="stage"><span class="tag silver">Silver</span><h2>Making it ours</h2></div>
+
+<ol class="steps">
+  <li data-n="5">
+    <span class="what">Cookbook transform</span>
+    <span class="detail">Filter <code>bronze.raw_data</code> to the <code>(orgId, sourceId)</code> pairs this sink's cookbook configures, then run the transform chain.</span>
+    <span class="moves">→ MERGE on <b>dataId</b> into a typed silver table. <b>This is where strings become dates, numbers and enums.</b></span>
+  </li>
+  <li data-n="6">
+    <span class="what">Build structure</span>
+    <span class="detail">Product hierarchy is <em>derived</em>: attributes → <code>product_node_relation</code>. Location hierarchy is <em>declared</em>: relations → <code>location_closure</code>. Two different models.</span>
+    <span class="moves">→ hierarchies become queryable at every level</span>
+  </li>
+  <li data-n="7">
+    <span class="what">Apply mappings</span>
+    <span class="detail"><code>product_mapping</code> / <code>location_mapping</code>. <code>SAME</code> pools two codes into one entity; <code>SIMILAR</code> borrows the other's demand as a proxy; <code>REMOVE</code> retires a prior declaration.</span>
+    <span class="moves">→ a style that changed code mid-season gets <b>one continuous history</b> instead of two truncated ones</span>
+  </li>
+  <li data-n="8">
+    <span class="what">Aggregate</span>
+    <span class="detail"><code>agg_sales</code>, <code>agg_inventory</code>.</span>
+    <span class="moves">→ weekly totals at <b>PVL</b> grain (product–variant–location)</span>
+  </li>
+</ol>
+
+<div class="stage"><span class="tag gold">Gold</span><h2>Computing</h2></div>
+
+<ol class="steps">
+  <li data-n="9">
+    <span class="what">Facts</span>
+    <span class="detail"><code>gold.stock_facts_pvl</code> — 13 columns, exactly one grain, no pooling. Raw variant and location; same-SKU grouping is deliberately deferred.</span>
+    <span class="moves">→ facts stay facts</span>
+  </li>
+  <li data-n="10">
+    <span class="what">The cube</span>
+    <span class="detail"><code>gold.stock</code> — 32 columns across six levels, built in phases: foundation → enrichment → rolldown → variant → ep_constraint → lost_sales.</span>
+    <span class="moves">→ every phase hands off through a <b>Delta table</b>, never in memory</span>
+  </li>
+  <li data-n="11">
+    <span class="what">Forecast</span>
+    <span class="detail"><code>inference/demand</code> fits the model.</span>
+    <span class="moves">→ writes <b>demand</b> back into <code>gold.stock</code> at its own levels</span>
+  </li>
+</ol>
+
+<div class="stage"><span class="tag serve">Serving</span><h2>Getting it out</h2></div>
+
+<ol class="steps">
+  <li data-n="12">
+    <span class="what">Mirror</span>
+    <span class="detail"><code>targets/postgres</code> copies 27 tables out of the lakehouse; <code>targets/freshness</code> maintains the <code>source_last_updated</code> ledger behind the product's "data has moved" surfaces.</span>
+    <span class="moves">→ <b>Azure Postgres</b> — an indexed, low-latency store the app can actually query</span>
+  </li>
+  <li data-n="13">
+    <span class="what">Query</span>
+    <span class="detail">Report widgets read Postgres through an ibis expression. Planning grids skip it and read the Delta files directly via DuckDB, warmed into a per-replica cache.</span>
+    <span class="moves">→ rows, in memory, on one replica</span>
+  </li>
+  <li data-n="14">
+    <span class="what">Shape</span>
+    <span class="detail">Rollup and the display cascade apply each metric's own aggregation. The fetch layer never aggregates — that separation is what keeps ratio metrics correct.</span>
+    <span class="moves">→ <b>KPI tiles and grid cells</b></span>
+  </li>
+  <li data-n="15">
+    <span class="what">Edit</span>
+    <span class="detail">Plans only. <code>/plan/edit</code> → recompute derived metrics → cascade to children → write back.</span>
+    <span class="moves">→ back into the plan store, and eventually published</span>
+  </li>
+</ol>
+
+<div class="alongside">
+  <strong>Running alongside all of it:</strong> <code>ops/data_quality</code> — five lanes
+  checking silver and gold, the Postgres mirror, parity between the two, and the cookbook
+  chains themselves. A passing run means "everything we could name was run, and everything we
+  could not run is written down."
+</div>
+
+<h3>Three things this map makes obvious</h3>
+
+<ul>
+  <li><strong>Step 0 is the real work.</strong> Steps 1–4 are byte-identical for every
+    customer. Onboarding a retailer means writing rows in two config tables, not writing a
+    pipeline.</li>
+  <li><strong>Step 5 is where typing happens.</strong> Everything upstream of it is strings.
+    If a date parses wrong or a number arrives as text, the cookbook is where to look —
+    nowhere else.</li>
+  <li><strong>Step 12 is a boundary under renovation.</strong> The Postgres mirror is being
+    decommissioned, which is exactly why step 13 has two different answers depending on which
+    surface is asking.</li>
+</ul>
+
+<footer>
+  <p>A map of the pipeline as of September 2026. The detail behind each stage:
+    <a href="/research/data-platform-source-to-screen/">Source to screen</a> for steps 0–12,
+    <a href="/learning/backend-report-data-flow/">How a report becomes pixels</a> for steps 13–15,
+    and <a href="/research/data-quality-monitoring/">Trusting the numbers</a> for the monitoring that spans them.</p>
+</footer>
+
+</body>
+</html>
