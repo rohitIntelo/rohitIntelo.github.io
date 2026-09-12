@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How a report becomes pixels — the backend read path</title>
+<meta name="description" content="Tracing the Intelo backend data flow that loads a report and renders its KPI cards and grids.">
+<style>
+  :root {
+    --bg: #fdfdfc;
+    --fg: #1a1a18;
+    --muted: #6b6b66;
+    --rule: #d8d8d2;
+    --accent: #8a5a2b;
+    --code-bg: #f3f2ee;
+    --card: #f8f7f4;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #16161a;
+      --fg: #e6e6e2;
+      --muted: #9a9a94;
+      --rule: #32323a;
+      --accent: #d6a06a;
+      --code-bg: #1f1f25;
+      --card: #1c1c22;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--bg); color: var(--fg); }
+  body {
+    max-width: 46rem;
+    margin: 0 auto;
+    padding-block: 3.5rem 5rem;
+    padding-left: 1.25rem;
+    padding-right: 1.25rem;
+    font: 17px/1.65 Georgia, 'Iowan Old Style', 'Times New Roman', serif;
+    -webkit-text-size-adjust: 100%;
+  }
+  h1 {
+    font-size: 1.85rem;
+    line-height: 1.2;
+    font-weight: normal;
+    margin: 0 0 0.4rem;
+    letter-spacing: -0.01em;
+  }
+  .sub { color: var(--muted); font-style: italic; margin: 0 0 2rem; }
+  h2 {
+    font-size: 1.25rem;
+    font-weight: normal;
+    margin: 3rem 0 0.75rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--rule);
+    letter-spacing: -0.01em;
+  }
+  h2 .n {
+    font: 600 0.7rem/1 ui-monospace, Menlo, monospace;
+    color: var(--accent);
+    letter-spacing: 0.12em;
+    display: block;
+    margin-bottom: 0.5rem;
+    text-transform: uppercase;
+  }
+  h3 { font-size: 1.02rem; font-weight: 600; margin: 1.75rem 0 0.4rem; }
+  p { margin: 0 0 1rem; }
+  a { color: var(--fg); text-decoration-color: var(--accent); text-underline-offset: 2px; }
+  code, pre {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  code {
+    font-size: 0.85em;
+    background: var(--code-bg);
+    padding: 0.1em 0.35em;
+    border-radius: 3px;
+    word-break: break-word;
+  }
+  pre {
+    background: var(--code-bg);
+    border-left: 2px solid var(--accent);
+    padding: 0.9rem 1rem;
+    overflow-x: auto;
+    font-size: 0.8rem;
+    line-height: 1.55;
+    margin: 0 0 1.25rem;
+  }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  ul, ol { padding-left: 1.3rem; margin: 0 0 1rem; }
+  li { margin-bottom: 0.5rem; }
+  .lede {
+    font-size: 1.08rem;
+    border-left: 2px solid var(--accent);
+    padding-left: 1rem;
+    margin: 0 0 2rem;
+  }
+  .note {
+    background: var(--card);
+    border: 1px solid var(--rule);
+    border-radius: 4px;
+    padding: 1rem 1.15rem;
+    margin: 0 0 1.25rem;
+    font-size: 0.95rem;
+  }
+  .note strong { color: var(--accent); }
+  .tbl-wrap { overflow-x: auto; margin: 0 0 1.25rem; }
+  table { border-collapse: collapse; width: 100%; font-size: 0.88rem; }
+  th, td {
+    text-align: left;
+    padding: 0.55rem 0.7rem;
+    border-bottom: 1px solid var(--rule);
+    vertical-align: top;
+  }
+  th { font-weight: 600; color: var(--muted); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.06em; }
+  td code { font-size: 0.8em; }
+  figure { margin: 0 0 1.5rem; }
+  figure svg { width: 100%; height: auto; max-width: 100%; display: block; }
+  figcaption { color: var(--muted); font-size: 0.85rem; font-style: italic; margin-top: 0.6rem; }
+  footer {
+    margin-top: 4rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--rule);
+    color: var(--muted);
+    font-size: 0.85rem;
+  }
+  .path { color: var(--accent); }
+</style>
+</head>
+<body>
+
+<h1>How a report becomes pixels</h1>
+<p class="sub">Tracing the backend read path that loads a report and fills its KPI cards and grids.</p>
+
+<p class="lede">
+  There is no single "report endpoint". Two quite different pipelines render what
+  looks like one screen: a stateless query path for read-only report widgets, and a
+  stateful, cached, replica-pinned path for editable planning grids. Nearly every
+  confusing bug in this area comes from assuming a screen is using one when it is
+  using the other.
+</p>
+
+<h2><span class="n">01 · The shape</span>Two paths, not one</h2>
+
+<p>
+  Both start in the React app and both terminate in <code>report-builder</code>, a Python
+  FastAPI service. What differs is everything in between.
+</p>
+
+<div class="tbl-wrap">
+<table>
+  <thead>
+    <tr><th></th><th>Report widgets</th><th>Planning grid</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Endpoint</strong></td>
+      <td><code>/api/v1/widget-data</code></td>
+      <td><code>/api/v1/plan/data</code></td>
+    </tr>
+    <tr>
+      <td><strong>State</strong></td>
+      <td>Stateless — query, return, forget</td>
+      <td>Warmed cache held on one replica</td>
+    </tr>
+    <tr>
+      <td><strong>Query</strong></td>
+      <td>ibis expression via <code>query-builder</code></td>
+      <td>DuckDB over a materialised fact frame</td>
+    </tr>
+    <tr>
+      <td><strong>Editable</strong></td>
+      <td>No</td>
+      <td>Yes — <code>/plan/edit</code>, roll-down, write-back</td>
+    </tr>
+    <tr>
+      <td><strong>Transport</strong></td>
+      <td>Request/response JSON</td>
+      <td>JSON <em>or</em> SSE, chosen by <code>Accept</code></td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<div class="note">
+  <strong>A trap worth knowing.</strong> <code>common/proto/widgetData.proto</code> still
+  defines a <code>WidgetData</code> gRPC service, and the gateway calls a method named
+  <code>fetchWidgetData</code>. Neither is gRPC any more. <code>report-builder/src/server.py</code>
+  states plainly that FastAPI "replaces the original gRPC server", and the gateway's client is
+  a plain <code>fetch()</code> to <code>${REPORT_BUILDER_URL}/api/v1/widget-data</code>. The proto
+  is vestigial. Inter-service comms elsewhere in the repo <em>are</em> gRPC — this one is not.
+</div>
+
+<h2><span class="n">02 · The hop</span>Browser → gateway → report-builder</h2>
+
+<p>
+  The React app never talks to <code>report-builder</code> directly. Everything goes through
+  <code>web-gateway</code>, an Express service that owns three things the Python service
+  deliberately does not:
+</p>
+
+<ul>
+  <li><strong>Authentication</strong> — Firebase auth resolves the caller.</li>
+  <li><strong>Org scope</strong> — <code>orgId</code> is resolved from the authenticated
+    request, never trusted from the query string. This is load-bearing: the only
+    tenant-boundary P0 in this service's review history was one organisation's publication
+    being loaded into another's cache.</li>
+  <li><strong>Permissions</strong> — including <code>agentScope</code>, which opts report
+    surfaces into per-agent narrow roles.</li>
+</ul>
+
+<p>
+  For planning routes the gateway is a genuine proxy (<code>_proxyReportBuilder</code>), not
+  a client: it forwards the body, streams SSE back untouched, and preserves upstream status
+  codes. Its abort budget is time-to-first-byte, which is why <code>/plan/data</code> gets
+  220&nbsp;s while ordinary routes get 30&nbsp;s — the endpoint legitimately sits silent
+  while a cold cache warms.
+</p>
+
+<h2><span class="n">03 · The sequence</span>What the FE actually calls</h2>
+
+<figure>
+<svg viewBox="0 0 660 300" role="img" aria-labelledby="seqtitle">
+  <title id="seqtitle">Request sequence from browser to report-builder</title>
+  <g fill="none" stroke="currentColor" stroke-width="1.2" opacity="0.85">
+    <rect x="8"   y="16" width="118" height="30" rx="4"/>
+    <rect x="188" y="16" width="118" height="30" rx="4"/>
+    <rect x="368" y="16" width="140" height="30" rx="4"/>
+  </g>
+  <g font-family="ui-monospace, Menlo, monospace" font-size="11" fill="currentColor">
+    <text x="67"  y="35" text-anchor="middle">React FE</text>
+    <text x="247" y="35" text-anchor="middle">web-gateway</text>
+    <text x="438" y="35" text-anchor="middle">report-builder</text>
+  </g>
+  <g stroke="currentColor" stroke-width="1" opacity="0.25" stroke-dasharray="3 4">
+    <line x1="67"  y1="50" x2="67"  y2="292"/>
+    <line x1="247" y1="50" x2="247" y2="292"/>
+    <line x1="438" y1="50" x2="438" y2="292"/>
+  </g>
+  <g stroke="currentColor" stroke-width="1.3" opacity="0.9" marker-end="url(#ar)">
+    <line x1="67"  y1="76"  x2="432" y2="76"/>
+    <line x1="67"  y1="120" x2="432" y2="120"/>
+    <line x1="438" y1="150" x2="73"  y2="150"/>
+    <line x1="67"  y1="196" x2="432" y2="196"/>
+    <line x1="438" y1="258" x2="73"  y2="258"/>
+  </g>
+  <defs>
+    <marker id="ar" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0 0 L8 4 L0 8 z" fill="currentColor" opacity="0.9"/>
+    </marker>
+  </defs>
+  <g font-family="ui-monospace, Menlo, monospace" font-size="10.5" fill="currentColor">
+    <text x="252" y="71">POST /report-config</text>
+    <text x="252" y="115">GET /plan/{executionId}/state</text>
+    <text x="252" y="145" opacity="0.7">poll every 5s until Completed</text>
+    <text x="252" y="191">POST /plan/data  (Accept: text/event-stream)</text>
+    <text x="252" y="222" opacity="0.7">warm → progress events → rows</text>
+    <text x="252" y="253">SSE: tiles, grid pages</text>
+  </g>
+  <g font-family="ui-monospace, Menlo, monospace" font-size="10" fill="currentColor" opacity="0.6">
+    <text x="530" y="80">layout + widgets</text>
+    <text x="530" y="124">plan metadata</text>
+    <text x="530" y="200">cache identity</text>
+  </g>
+</svg>
+<figcaption>The planning-grid sequence. The config call is deliberately variable-independent so it can hold a 60&nbsp;s TTL cache.</figcaption>
+</figure>
+
+<h3>1. <code class="path">/report-config</code> — the layout</h3>
+<p>
+  Returns the report's <code>widgets</code> array: which KPI cards exist, which table
+  widget exists, their columns, filters and view modes. This is layout and configuration
+  only — no facts. Agent stream filters are injected into each widget's filter list here,
+  with field names remapped against the widget's own column config, because the agent
+  emits short names like <code>product.class_nm</code> while widget sources use their own.
+</p>
+
+<h3>2. <code class="path">/plan/{executionId}/state</code> — the bootstrap</h3>
+<p>
+  Plan-level metadata that used to ride on the config call: <code>planStatus</code>,
+  <code>planVersionId</code>, <code>editableMetrics</code>, time periods, plus
+  <code>executionStatus</code> and <code>cacheWarmedAt</code>. The FE polls this every
+  5&nbsp;s while the execution is in flight and only fires <code>/plan/data</code> once it
+  reports <code>Completed</code>. Splitting it out is what keeps the config response
+  cacheable.
+</p>
+
+<h3>3. <code class="path">/plan/data</code> — the numbers</h3>
+<p>
+  One endpoint serves both the KPI tiles and the grid rows. It forks on the
+  <code>Accept</code> header: <code>text/event-stream</code> gets SSE with progress events
+  during a cold warm, anything else gets a single JSON body. A cold warm <em>must</em> emit
+  progress — silence before the first event is indistinguishable from a hang.
+</p>
+
+<h2><span class="n">04 · Storage</span>Where the numbers physically live</h2>
+
+<p>Four tiers, and a given request may touch all four.</p>
+
+<div class="tbl-wrap">
+<table>
+  <thead>
+    <tr><th>Tier</th><th>Holds</th><th>Read by</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Azure Postgres</strong><br><span style="opacity:.65">control plane</span></td>
+      <td>Report + widget config, executions, plan versions, locks, publications, the tile manifest</td>
+      <td>Every request</td>
+    </tr>
+    <tr>
+      <td><strong>Databricks</strong><br><span style="opacity:.65">lakehouse</span></td>
+      <td><code>silver.mfp_facts</code> — long-format plan layers, partitioned by <code>(orgId, source_layer)</code></td>
+      <td>Cache warm</td>
+    </tr>
+    <tr>
+      <td><strong>Blob</strong><br><span style="opacity:.65">shared tiles</span></td>
+      <td>Immutable Parquet month tiles for the lakehouse demand-forecast path</td>
+      <td>Any replica, no re-fetch</td>
+    </tr>
+    <tr>
+      <td><strong>DuckDB</strong><br><span style="opacity:.65">per-replica</span></td>
+      <td>The warmed fact frame the grid is actually computed from</td>
+      <td>Every read and edit</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<p>
+  The Databricks read has two executors behind one expression. <code>lakehouse_layered</code>
+  builds an ibis predicate tree — plan-version and layer selection, grain excludes, fiscal-year
+  window, node scope, seasons, channels — and then either hands it to the SQL warehouse or,
+  by default, unbinds it onto a DuckDB backend that reads the Delta files directly.
+  The design note on that change is worth internalising:
+</p>
+
+<pre><code>There is no second implementation of any predicate, which is
+the whole point: a hand-translated WHERE clause is exactly
+where a "faster read" silently starts serving different numbers.</code></pre>
+
+<p>
+  Same tree, different executor, one kill switch (<code>MFP_DELTA_DIRECT=false</code>).
+  Everything after the scan — layer-overlap collapse, the long→wide pivot, rate derivation —
+  is identical on both paths.
+</p>
+
+<h2><span class="n">05 · Affinity</span>Why your request is pinned to one replica</h2>
+
+<p>
+  The warmed frame lives in a DuckDB connection inside one container's memory. A second
+  request that lands on a different replica finds nothing and warms again from scratch —
+  expensive, and for an in-progress edit, wrong.
+</p>
+
+<p>
+  So <code>report-builder</code> returns an Azure <code>azure-app-affinity</code> cookie, the
+  FE echoes it back as an <code>X-RB-Affinity</code> header per <code>executionId</code>, and
+  the gateway forwards it upstream. The header rather than the cookie is what survives
+  <em>gateway</em> scale-out.
+</p>
+
+<p>
+  MFP goes further with a shared, plan-keyed pin persisted on the scenario row, which
+  outranks the per-browser token — so every user of the same plan converges on the one warm
+  replica instead of each warming their own copy.
+</p>
+
+<h2><span class="n">06 · The cache identity rule</span>The single biggest defect family</h2>
+
+<p>
+  This is the part to actually remember. The cache is keyed roughly
+  <code>report:{report_id}</code> plus context — but <em>what gets loaded into it</em> depends
+  on inputs that historically were not in the key. The next caller then silently reuses the
+  wrong rows. Not an error, not an empty grid: plausible numbers that are wrong.
+</p>
+
+<div class="note">
+  <strong>The rule.</strong> A cache key must include every input that narrows, filters or
+  reshapes what is loaded. If two requests would populate the cache with different rows,
+  they must not share a key.
+</div>
+
+<p>Each of these has caused a real defect by being absent from the key:</p>
+
+<ul>
+  <li><strong>Date window</strong> — the first warm loads <code>today ± 3 weeks</code>; a later caller wanting history silently reuses that narrow slice.</li>
+  <li><strong>Execution filters</strong> — one execution warms with <code>department=BIGBOYS</code>; another reuses it.</li>
+  <li><strong>Workflow stage / plan version</strong> — stage selection reads sharing one plan cache keyed only by org.</li>
+  <li><strong>Fact source</strong> — an "already loaded" short-circuit returns before noticing the report now resolves to the lakehouse path mid-rollout.</li>
+</ul>
+
+<p>
+  Two corollaries. An already-warm short-circuit must <em>re-validate the shaping inputs</em>,
+  not just return — "already loaded" is only true for the same window, filters and source. And
+  a window derived from <code>date.today()</code> is computed once at warm time and goes stale
+  while the cache stays resident, so either key on it or recompute it.
+</p>
+
+<h2><span class="n">07 · Rendering</span>How tiles and cells diverge</h2>
+
+<p>
+  KPI cards and grid cells come from the same warmed frame but not the same code path, and
+  the separation is deliberate.
+</p>
+
+<p>
+  <strong>Coverage and serving never aggregate.</strong> Rolling up happens later, in the
+  display cascade, which applies each metric's own aggregation. That is precisely what keeps
+  ratio metrics correct — a margin percentage summed across rows is nonsense, so the layer
+  that fetches rows is forbidden from summing anything.
+</p>
+
+<p>Three sharp edges follow from that design:</p>
+
+<ul>
+  <li>Time grains must not be mixed in one rollup window — Q/H/Y suffixes belong to different forward windows.</li>
+  <li>A metric whose canonical aggregation the rollup engine cannot express must be rejected explicitly rather than routed in and quietly mis-aggregated.</li>
+  <li>There are row-oriented and column-oriented pivots. A field emitted through only one of them is simply missing from the other.</li>
+</ul>
+
+<h2><span class="n">08 · Editing</span>The write path, briefly</h2>
+
+<p>
+  <code>/plan/edit</code> applies an edit to the warmed frame, recomputes derived metrics,
+  cascades to children, and eventually writes back. Three things are worth carrying around:
+</p>
+
+<ul>
+  <li><strong>"Lock" means three unrelated things.</strong> <code>held_nodes</code> is a
+    metric-dependency hold during roll-down; <code>locked_field</code> is the held factor in a
+    product solve; <code>plan_version.lockedBy</code> is concurrency — which <em>user</em> may
+    edit a scope. The source file itself carries a warning about the collision.</li>
+  <li><strong>Write-back and publication must commit together.</strong> Committing one and
+    failing the other leaves the two out of sync.</li>
+  <li><strong>A self-guarded formula disables its own edit cascade.</strong> Metrics protect a
+    seeded value with <code>COALESCE(NULLIF("&lt;self&gt;", 0), &lt;derivation&gt;)</code> so the
+    warm-time formula sweep does not overwrite it — but the same string runs on edit, where the
+    guard makes recompute a no-op. That shipped: editing Sales Units never moved Sales&nbsp;$.
+    The fix is a separate unguarded <code>cascade_formula</code> for the edit graph.</li>
+</ul>
+
+<h2><span class="n">09 · Debugging</span>Reading a slow or wrong grid</h2>
+
+<ol>
+  <li><strong>Wrong numbers, no error?</strong> Suspect cache identity first. Ask what shaped
+    this load that is not in the key.</li>
+  <li><strong>Slow first open, fast after?</strong> That is the warm. Check
+    <code>cacheWarmedAt</code> on <code>/plan/state</code>.</li>
+  <li><strong>Fast for you, slow for a colleague?</strong> Affinity — they landed on a
+    different replica and warmed their own copy.</li>
+  <li><strong>Tiles disagree with the grid?</strong> The display cascade, not the fetch.
+    Check per-metric aggregation and whether a ratio is being summed.</li>
+  <li><strong>Empty grid on a Completed execution?</strong> Snapshot rows are GC'd on a 30-day
+    TTL. A reused old execution opens empty with no error.</li>
+</ol>
+
+<footer>
+  <p>
+    Written against <code>services/report-builder</code>, <code>services/web-gateway</code> and
+    <code>common/python/ibis-backends</code> as of September 2026. Line numbers move; the
+    shapes described here have been stable for a while.
+  </p>
+</footer>
+
+</body>
+</html>
