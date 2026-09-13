@@ -1,0 +1,947 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Caches, from first principles to ours</title>
+<meta name="description" content="What a cache actually promises, the four questions every one has to answer, and a complete map of the caches running in the Intelo retail-agents backend.">
+<style>
+  :root {
+    --bg: #fdfdfc;
+    --fg: #1a1a18;
+    --muted: #6b6b66;
+    --rule: #d8d8d2;
+    --accent: #8a5a2b;
+    --code-bg: #f3f2ee;
+    --card: #f8f7f4;
+    --warn: #8f3a2f;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #16161a;
+      --fg: #e6e6e2;
+      --muted: #9a9a94;
+      --rule: #32323a;
+      --accent: #d6a06a;
+      --code-bg: #1f1f25;
+      --card: #1c1c22;
+      --warn: #e08c7a;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--bg); color: var(--fg); }
+  body {
+    max-width: 46rem;
+    margin: 0 auto;
+    padding-block: 3.5rem 5rem;
+    padding-left: 1.25rem;
+    padding-right: 1.25rem;
+    font: 17px/1.65 Georgia, 'Iowan Old Style', 'Times New Roman', serif;
+    -webkit-text-size-adjust: 100%;
+  }
+  h1 {
+    font-size: 1.85rem;
+    line-height: 1.2;
+    font-weight: normal;
+    margin: 0 0 0.4rem;
+    letter-spacing: -0.01em;
+  }
+  .sub { color: var(--muted); font-style: italic; margin: 0 0 2rem; }
+  h2 {
+    font-size: 1.25rem;
+    font-weight: normal;
+    margin: 3rem 0 0.75rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--rule);
+    letter-spacing: -0.01em;
+  }
+  h2 .n {
+    font: 600 0.7rem/1 ui-monospace, Menlo, monospace;
+    color: var(--accent);
+    letter-spacing: 0.12em;
+    display: block;
+    margin-bottom: 0.5rem;
+    text-transform: uppercase;
+  }
+  h3 { font-size: 1.02rem; font-weight: 600; margin: 1.75rem 0 0.4rem; }
+  h4 { font-size: 0.95rem; font-weight: 600; margin: 1.25rem 0 0.3rem; color: var(--muted); }
+  p { margin: 0 0 1rem; }
+  a { color: var(--fg); text-decoration-color: var(--accent); text-underline-offset: 2px; }
+  code, pre {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  code {
+    font-size: 0.85em;
+    background: var(--code-bg);
+    padding: 0.1em 0.35em;
+    border-radius: 3px;
+    word-break: break-word;
+  }
+  pre {
+    background: var(--code-bg);
+    border-left: 2px solid var(--accent);
+    padding: 0.9rem 1rem;
+    overflow-x: auto;
+    font-size: 0.8rem;
+    line-height: 1.55;
+    margin: 0 0 1.25rem;
+  }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  ul, ol { padding-left: 1.3rem; margin: 0 0 1rem; }
+  li { margin-bottom: 0.5rem; }
+  .lede {
+    font-size: 1.08rem;
+    border-left: 2px solid var(--accent);
+    padding-left: 1rem;
+    margin: 0 0 2rem;
+  }
+  .note {
+    background: var(--card);
+    border: 1px solid var(--rule);
+    border-radius: 4px;
+    padding: 1rem 1.15rem;
+    margin: 0 0 1.25rem;
+    font-size: 0.95rem;
+  }
+  .note strong { color: var(--accent); }
+  .note.bad strong { color: var(--warn); }
+  .tbl-wrap { overflow-x: auto; margin: 0 0 1.25rem; }
+  table { border-collapse: collapse; width: 100%; font-size: 0.88rem; }
+  th, td {
+    text-align: left;
+    padding: 0.55rem 0.7rem;
+    border-bottom: 1px solid var(--rule);
+    vertical-align: top;
+  }
+  th {
+    font-weight: 600;
+    border-bottom: 1px solid var(--fg);
+    white-space: nowrap;
+  }
+  td code { font-size: 0.8em; }
+  figure { margin: 0 0 1.5rem; }
+  figure svg { display: block; width: 100%; height: auto; max-width: 100%; }
+  figcaption { color: var(--muted); font-size: 0.85rem; font-style: italic; margin-top: 0.5rem; }
+  .toc {
+    background: var(--card);
+    border: 1px solid var(--rule);
+    border-radius: 4px;
+    padding: 1.1rem 1.3rem 0.9rem;
+    margin: 0 0 2.5rem;
+    font-size: 0.92rem;
+  }
+  .toc ol { margin: 0.4rem 0 0; padding-left: 1.2rem; }
+  .toc li { margin-bottom: 0.25rem; }
+  .toc > strong { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--accent); font-family: ui-monospace, Menlo, monospace; }
+  hr { border: 0; border-top: 1px solid var(--rule); margin: 3rem 0 2rem; }
+  .foot { color: var(--muted); font-size: 0.88rem; }
+  .kicker { font: 600 0.7rem/1 ui-monospace, Menlo, monospace; color: var(--accent); letter-spacing: 0.12em; text-transform: uppercase; display: block; margin: 2.5rem 0 0.75rem; }
+  .tag { font: 0.7rem/1.4 ui-monospace, Menlo, monospace; color: var(--muted); display: block; margin-top: 0.15rem; }
+  blockquote { margin: 0 0 1.25rem; padding-left: 1rem; border-left: 2px solid var(--rule); color: var(--muted); font-style: italic; }
+</style>
+</head>
+<body>
+
+<h1>Caches, from first principles to ours</h1>
+<p class="sub">What a cache actually promises, the four questions every one of them has to answer &mdash; and a map of the thirty-odd caches running in the Intelo retail-agents backend.</p>
+
+<p class="lede">A cache is a bet that work repeats. Everything hard about caching follows from the fact that the bet is made <em>now</em> and settled <em>later</em>, by which time the world may have moved. This guide does the theory first, then walks every cache we actually run, then catalogues every way ours have gone wrong in production &mdash; because that catalogue is the real curriculum.</p>
+
+<div class="toc">
+  <strong>Contents</strong>
+  <ol>
+    <li><a href="#bet">The bet, and what it costs</a></li>
+    <li><a href="#four">The four questions</a></li>
+    <li><a href="#key">Q1 &mdash; What is the key?</a></li>
+    <li><a href="#invalidation">Q2 &mdash; When is it wrong?</a></li>
+    <li><a href="#eviction">Q3 &mdash; What gets thrown out?</a></li>
+    <li><a href="#miss">Q4 &mdash; Who pays the miss?</a></li>
+    <li><a href="#tiers">Where caches live</a></li>
+    <li><a href="#coherence">Coherence: the part that actually breaks</a></li>
+    <li><a href="#map">The map of ours</a></li>
+    <li><a href="#generation">Deep dive: invalidation without eviction</a></li>
+    <li><a href="#coverage">Deep dive: hierarchy-aware coverage</a></li>
+    <li><a href="#singleflight">Deep dive: cluster single-flight and budgets</a></li>
+    <li><a href="#scopegate">Deep dive: the cache that says no</a></li>
+    <li><a href="#plancache">Deep dive: PlanCache and memory governance</a></li>
+    <li><a href="#blob">Deep dive: the shared blob tiers</a></li>
+    <li><a href="#affinity">Deep dive: routing as a hit-rate strategy</a></li>
+    <li><a href="#watermark">Deep dive: telling the client it is stale</a></li>
+    <li><a href="#llm">Deep dive: caching a language model</a></li>
+    <li><a href="#engine">Engine-level caches we merely configure</a></li>
+    <li><a href="#failures">Every way ours have failed</a></li>
+    <li><a href="#checklist">The checklist</a></li>
+  </ol>
+</div>
+
+<h2 id="bet"><span class="n">Part I &middot; 01</span>The bet, and what it costs</h2>
+
+<p>A cache stores the result of work so the work need not be repeated. That is the whole idea, and it is worth stating what you are actually trading.</p>
+
+<p>You give up <strong>truth</strong> and <strong>memory</strong> to buy <strong>latency</strong> and <strong>cost</strong>. Those are not symmetrical currencies. Latency and cost failures are visible &mdash; a slow page, a big bill. Truth failures are invisible: a cache serving a stale answer looks exactly like a cache serving a correct one. Every log line says success. This asymmetry is why caching bugs are the ones that survive longest in a codebase, and why every cache-related rule below is really a rule about making truth failures loud.</p>
+
+<p>The economics are worth being explicit about, because they decide whether a cache is worth having at all:</p>
+
+<div class="tbl-wrap">
+<table>
+  <tr><th>Term</th><th>Meaning</th><th>Where it bites us</th></tr>
+  <tr><td>Hit rate <em>h</em></td><td>Fraction of requests served without the underlying work</td><td>If <em>h</em> is low, you have paid the memory and the complexity for nothing</td></tr>
+  <tr><td>Miss cost</td><td>Work done on a miss, <em>plus</em> the cache-fill work</td><td>A cold MFP plan warm measured 173s in prod &mdash; a miss is not "a bit slower", it is a different user experience</td></tr>
+  <tr><td>Effective latency</td><td><code>h &times; hit_cost + (1&minus;h) &times; miss_cost</code></td><td>A 95% hit rate on a 170s miss is still a 8.5s average</td></tr>
+  <tr><td>Staleness window</td><td>How wrong an answer may be, and for how long</td><td>The thing you must be able to state out loud for every cache you own</td></tr>
+  <tr><td>Footprint</td><td>Bytes held, and on whose budget</td><td>Ours OOM-crash-looped two environments once by getting this wrong &mdash; see &sect;20</td></tr>
+</table>
+</div>
+
+<p>The last row deserves emphasis. A cache is not free memory &mdash; it is memory <em>you have promised to give back</em> and have not yet. If you cannot say how it gets given back, you have not written a cache, you have written a leak with good intentions.</p>
+
+<h2 id="four"><span class="n">Part I &middot; 02</span>The four questions</h2>
+
+<p>Every cache, from a <code>lru_cache</code> decorator to a distributed tile store, answers the same four questions. Most caching bugs are one of these answered implicitly, which is to say answered wrong.</p>
+
+<ol>
+  <li><strong>What is the key?</strong> What makes two requests "the same request"?</li>
+  <li><strong>When is it wrong?</strong> What event, or what passage of time, makes a stored entry no longer a correct answer?</li>
+  <li><strong>What gets thrown out?</strong> When the space runs out, what leaves, and who decides?</li>
+  <li><strong>Who pays the miss?</strong> When <em>n</em> callers miss at once, do <em>n</em> of them do the work?</li>
+</ol>
+
+<p>The rest of Part I is one section per question.</p>
+
+<h2 id="key"><span class="n">Part I &middot; 03</span>Q1 &mdash; What is the key?</h2>
+
+<p>The rule has one sentence: <strong>the key must include every input that changes what gets stored.</strong> If two requests would populate the cache with different content, they must not share a key.</p>
+
+<p>That sounds trivial. It is the single largest defect family in our codebase &mdash; 31 separate review findings on one service. The reason it is hard is that the key is written where the lookup happens, and the shaping inputs are applied deep inside the load, often several layers down and often conditionally. The lookup site cannot see them.</p>
+
+<p>Our actual, historical list of "things that shaped the load but were missing from the key":</p>
+
+<div class="tbl-wrap">
+<table>
+  <tr><th>Missing input</th><th>What the user saw</th></tr>
+  <tr><td>Date window</td><td>The first request warmed <code>today &plusmn; 3 weeks</code>; a later caller needing history reused that narrow slice and saw an empty history</td></tr>
+  <tr><td>Execution filters</td><td>One execution warmed with <code>department=BIGBOYS</code>; a different execution reused it and saw only that department</td></tr>
+  <tr><td><code>execution_id</code></td><td>The warm was scoped by execution but the cache was not &mdash; snapshots bled across executions</td></tr>
+  <tr><td>Workflow stage / plan version</td><td>Stage selection reads shared one cache keyed only by org, so WIP data answered a FINAL request</td></tr>
+  <tr><td><code>is_plan</code></td><td>A read-only warm populated the cache; a subsequent <code>/plan/edit</code> continued on top of it</td></tr>
+  <tr><td>Fact source</td><td>An "already loaded" short-circuit returned before noticing the report now resolved to the lakehouse path mid-rollout</td></tr>
+  <tr><td>Dimension scope</td><td>Scoped hydration differed; the key did not</td></tr>
+</table>
+</div>
+
+<p>Three corollaries fall straight out of this, and all three have shipped as bugs:</p>
+
+<h3>Never cache a fallback under the key the caller asked for</h3>
+<p>A request for a version that does not exist yet may legitimately fall back to something else. If it writes that fallback under the selector-scoped key, the next caller &mdash; for whom the version now <em>does</em> exist &mdash; gets the fallback. Cache the answer you actually computed, under a key describing what it actually is, or do not cache it.</p>
+
+<h3>An "already warm" short-circuit must re-validate the shaping inputs</h3>
+<p>A <code>_base_loaded = True</code> flag answers "did someone load something?" The question you need answered is "did someone load <em>this</em>?" Those are only the same question when the key was complete, which is precisely what you are trying to verify. In our code, the window-coverage check is the correct shape of this test:</p>
+
+<pre><code>covered = (
+    cache._base_loaded
+    and cache._loaded_window is not None
+    and cache._loaded_window[0] &lt;= req_lo
+    and req_hi &lt;= cache._loaded_window[1]
+)</code></pre>
+
+<p>Note that it is a <em>containment</em> test, not an equality test. That is a hit-rate win that costs nothing: a narrower ask against a wider resident window is a hit. Generalising that idea properly is what &sect;11 is about.</p>
+
+<h3>A key derived from <code>now()</code> is computed once and then rots</h3>
+<p>A window of "today &plusmn; 3 weeks" is a different window tomorrow. If the key captures the <em>derivation</em> rather than the <em>result</em>, the cached entry silently answers yesterday's question forever. Either put the resolved window in the key, or recompute and re-check on every read.</p>
+
+<h2 id="invalidation"><span class="n">Part I &middot; 04</span>Q2 &mdash; When is it wrong?</h2>
+
+<p>There are exactly four families of answer, and they compose.</p>
+
+<h3>1. Time (TTL)</h3>
+<p>"Assume it is right for <em>N</em> seconds." The cheapest possible answer, and correct whenever you can state a tolerable staleness window. Its virtue is that it needs no coordination with the writer at all; its vice is that it is a guess, and it bounds your <em>worst</em> case, never your <em>typical</em> one. Most of our small caches are TTL: prompt store 5 min, attribution reference data 5 min, fiscal-year windows 15 min, scenario rule overlay 30s.</p>
+
+<h3>2. Event (explicit invalidation)</h3>
+<p>"The writer tells the cache." Precise, and the only family that gives you sub-second correctness. Its cost is that the writer must know every cache that exists, and the message must reach every holder. In a single process that is a function call. Across ten replicas with no message bus, it is a distributed-systems problem, and the usual result is that somebody writes the invalidation for the two call sites they remembered. (That is literally the shape of one of our open defects &mdash; see &sect;20.)</p>
+
+<h3>3. Version / generation (the key <em>is</em> the invalidation)</h3>
+<p>"Put the version of the data into the key." Now a data change does not invalidate anything &mdash; it simply causes every reader to compute a <em>different key</em>, which is a natural miss. Nothing is broadcast, nothing is evicted, and there is no window in which a reader can ask for the old key by mistake, because the old key is no longer derivable from current inputs.</p>
+
+<p>This is the strongest of the four and it is the one our best-designed cache uses throughout. &sect;11 is a full walkthrough.</p>
+
+<h3>4. Validation (revalidate on read)</h3>
+<p>"Hold it, but check cheaply before serving." HTTP's <code>ETag</code>/<code>If-None-Match</code> is the canonical form: the client holds the body, the server confirms in one cheap round trip whether it is still current. The cost is one round trip; the win is that the round trip is tiny compared to the payload. We do this for planning-grid state via a content watermark &mdash; &sect;17.</p>
+
+<div class="note">
+  <strong>How to choose.</strong> Ask what the writer can be made to do. If the writer can bump a counter in the same transaction as its write, use a generation &mdash; it is strictly better than an event, because it cannot be half-delivered. If the writer is outside your system (a nightly pipeline, a vendor API), you have TTL or a watermark the writer publishes. If the payload is big and the check is small, add validation on top of whichever you chose.
+</div>
+
+<h4>The two non-obvious extras</h4>
+
+<p><strong>Negative caching.</strong> A miss is also a result. If "not found" is expensive to determine and common, cache it &mdash; but cache it as a <em>distinct value</em>, not as absence. Our grouped-pivot cache uses a sentinel for exactly this: <code>_GROUPED_MISS</code> distinguishes "cached as legitimately empty" from "not cached", and the tile manifest records an empty window as <code>ready</code> with <code>uri = NULL</code> rather than writing an empty Parquet file. Without the distinction you re-derive emptiness forever, and worse, an empty-but-mistyped artifact can poison a union with a real one.</p>
+
+<p><strong>Jitter.</strong> If a thousand keys share a TTL and were filled by the same burst, they expire in the same second and the herd hits the origin together. The fix is a small, <em>deterministic</em> per-key offset &mdash; deterministic so every replica agrees on when a given key rolls over, per-key so different keys do not roll together. Ours is 10% of TTL, derived from a blake2b digest of the key:</p>
+
+<pre><code>def jitter_seconds(key: str, ttl_seconds: int) -&gt; float:
+    digest = hashlib.blake2b(key.encode(), digest_size=8).digest()
+    frac = int.from_bytes(digest, "big") / float(1 &lt;&lt; 64)
+    return frac * ttl_seconds * _JITTER_PCT</code></pre>
+
+<h2 id="eviction"><span class="n">Part I &middot; 05</span>Q3 &mdash; What gets thrown out?</h2>
+
+<p>Eviction is capacity management, and it is distinct from invalidation: invalidation removes entries because they are <em>wrong</em>, eviction removes entries because there is <em>no room</em>. Confusing the two produces caches that are correct but unbounded, or bounded but incoherent.</p>
+
+<div class="tbl-wrap">
+<table>
+  <tr><th>Policy</th><th>Evicts</th><th>Good for</th></tr>
+  <tr><td>LRU</td><td>Least recently used</td><td>The default. Workloads with temporal locality &mdash; a planner going back and forth between two widgets</td></tr>
+  <tr><td>LFU</td><td>Least frequently used</td><td>Stable popularity skew; resists a one-off scan flushing the hot set</td></tr>
+  <tr><td>TTL / idle</td><td>Anything untouched for <em>N</em></td><td>Session-shaped work: a plan a user has stopped editing should not hold a gigabyte</td></tr>
+  <tr><td>Byte budget</td><td>Whatever it takes to get under a byte ceiling</td><td>Entries of wildly different sizes &mdash; where count is a meaningless proxy for memory</td></tr>
+  <tr><td>Count bound</td><td>Oldest beyond <em>N</em> entries</td><td>Small, uniform lookups</td></tr>
+</table>
+</div>
+
+<p>We use all five, and the registry in our data-cache service actually makes the choice a declared property of each dataset rather than a property of the code:</p>
+
+<pre><code>class EvictionClass(Enum):
+    BYTE_LRU      = "byte_lru"       # evict by total bytes, LRU first
+    IDLE_LRU      = "idle_lru"       # evict after an idle window
+    COUNT_BOUNDED = "count_bounded"  # keep the N most-recent</code></pre>
+
+<p>Two lessons we paid for:</p>
+
+<p><strong>Count is not a proxy for memory when entries are not uniform.</strong> "Hold at most 16 pivot tables" is a fine bound when pivots are a few MB. It is not a bound at all when one of them is a 258k-row network-grain grid. If entry sizes span orders of magnitude, bound the bytes.</p>
+
+<p><strong>A per-entry limit does not bound the process.</strong> Our DuckDB caches each carry a <code>memory_limit</code>. That caps <em>one</em> cache. <em>N</em> caches reach <em>N</em>&times;limit, and the container dies. Whenever you set a per-item ceiling, ask separately what bounds the aggregate &mdash; and in our case that answer is a second, explicit sweep (&sect;14).</p>
+
+<h2 id="miss"><span class="n">Part I &middot; 06</span>Q4 &mdash; Who pays the miss?</h2>
+
+<p>A cold key that a hundred callers want simultaneously is the <em>cache stampede</em> (or thundering herd, or dogpile). Naively, all hundred miss, all hundred do the expensive work, and the origin &mdash; which the cache existed to protect &mdash; takes the worst load it will ever see at the exact moment the cache is least able to help.</p>
+
+<p>The remedy is <strong>single-flight</strong>: exactly one caller does the work; the rest wait on its result. Within a process this is a lock plus a registry of in-flight futures. Our substrate's version, with the two rules that matter:</p>
+
+<pre><code>async with self._lock:                  # guards coverage + in-flight registry
+    for tile in missing:
+        existing = self._inflight.get(tile)
+        if existing is not None:
+            awaitables.append(existing)  # someone else is fetching it — wait
+        else:
+            self._inflight[tile] = loop.create_future()
+            to_fetch.append(tile)        # we own this one
+
+# THE NETWORK FETCH RUNS OUTSIDE THE LOCK
+result = await self._reader.fetch(self._fact, tiles)</code></pre>
+
+<p><strong>Rule one: never hold the lock across the fetch.</strong> If you do, you have not built a cache, you have built a global mutex with a memory overhead &mdash; every request on the replica serialises behind the slowest origin call.</p>
+
+<p><strong>Rule two: resolve the futures on <em>every</em> exit path, including cancellation.</strong> Our code catches <code>BaseException</code>, not <code>Exception</code>, and the comment explains why:</p>
+
+<blockquote>BaseException (not Exception) so an asyncio.CancelledError from a timed-out fetch still resolves the in-flight futures &mdash; otherwise the claimed tiles stay stuck in <code>_inflight</code> and every later ensure for them awaits a future that never settles.</blockquote>
+
+<p>That is the single-flight failure mode to fear: not a duplicated fetch, but a <em>permanently wedged key</em>. One caller claims the key, dies in a way you did not anticipate, and every subsequent caller waits forever on a promise nobody will keep. Across a cluster, the same hazard reappears as a held lock, and the answer there is a lock TTL plus a takeover path &mdash; &sect;12.</p>
+
+<p>Single-flight has a cousin worth naming: <strong>pre-warming</strong>. Rather than making the unlucky first caller pay, a background process fills the cache before anyone asks. This converts a user-visible latency into a background cost, which is only a win when you can bound that cost &mdash; a prewarm loop that never manages to publish will re-warm forever. Ours guards against exactly that (&sect;15).</p>
+
+<h2 id="tiers"><span class="n">Part I &middot; 07</span>Where caches live</h2>
+
+<p>Caches stack. Each layer is faster and smaller than the one below, and each is shared by more consumers than the one above. Naming the layers is not pedantry &mdash; it tells you which invalidation problem you have, because <em>the sharing boundary is the coherence boundary</em>.</p>
+
+<figure>
+<svg viewBox="0 0 640 290" role="img" aria-label="Four cache tiers stacked from in-process to source of truth">
+  <style>
+    .tier { fill: none; stroke: currentColor; stroke-width: 1; opacity: 0.85; }
+    .lbl { font: 600 12px ui-monospace, Menlo, monospace; fill: currentColor; }
+    .desc { font: 12px Georgia, serif; fill: currentColor; opacity: 0.72; }
+    .tag { font: 10px ui-monospace, Menlo, monospace; fill: currentColor; opacity: 0.55; }
+    .arrow { stroke: currentColor; stroke-width: 1; opacity: 0.45; fill: none; }
+  </style>
+  <rect class="tier" x="8" y="8" width="470" height="52" rx="3"/>
+  <text class="lbl" x="24" y="30">L1 &middot; in-process</text>
+  <text class="desc" x="24" y="48">Python dicts, TTLCache, a DuckDB table. One replica. Nanoseconds.</text>
+  <text class="tag" x="494" y="40">per replica</text>
+
+  <rect class="tier" x="8" y="70" width="470" height="52" rx="3"/>
+  <text class="lbl" x="24" y="92">L2 &middot; node-local</text>
+  <text class="desc" x="24" y="110">On-disk DuckDB file, downloaded Parquet. Survives a request. Milliseconds.</text>
+  <text class="tag" x="494" y="102">per replica</text>
+
+  <rect class="tier" x="8" y="132" width="470" height="52" rx="3"/>
+  <text class="lbl" x="24" y="154">L3 &middot; shared object store</text>
+  <text class="desc" x="24" y="172">Immutable Parquet tiles on Blob. Built once, read by every replica.</text>
+  <text class="tag" x="494" y="164">cluster-wide</text>
+
+  <rect class="tier" x="8" y="194" width="470" height="52" rx="3"/>
+  <text class="lbl" x="24" y="216">L4 &middot; source of truth</text>
+  <text class="desc" x="24" y="234">Databricks SQL warehouse / Postgres. Slow, authoritative, metered.</text>
+  <text class="tag" x="494" y="226">the origin</text>
+
+  <path class="arrow" d="M 560 20 L 560 240"/>
+  <path class="arrow" d="M 556 234 L 560 242 L 564 234"/>
+  <text class="tag" x="572" y="120" transform="rotate(90 572 120)">miss falls through</text>
+</svg>
+<figcaption>The canonical stack. A miss falls down a layer; a fill propagates back up. The dashed rule of thumb: invalidation is easy above the sharing boundary and hard below it.</figcaption>
+</figure>
+
+<p>The critical property: <strong>L1 and L2 are private, L3 and L4 are shared.</strong> A private cache can be invalidated by the process that owns it, instantly and reliably. A shared cache can be invalidated by whoever writes it. The disaster zone is <em>a private cache of shared data</em> with no invalidation channel &mdash; which is exactly what ten replicas each holding their own copy of a plan is, and exactly the defect class in &sect;20.</p>
+
+<h2 id="coherence"><span class="n">Part I &middot; 08</span>Coherence: the part that actually breaks</h2>
+
+<p>Single-node caching is a solved problem. Multi-node caching is where the bodies are.</p>
+
+<p>Consider the setup we actually run: ~10 report-builder replicas behind a load balancer, each holding its own in-memory DuckDB copy of a plan, no message bus between them. A planner makes an edit. It lands on replica A, which applies it to its copy and durably writes it to Postgres. Replica A is now correct. Replicas B through J are now <em>silently wrong</em>, and will stay wrong until each independently cold-warms.</p>
+
+<p>The next read is a coin flip. If it routes to A, the user sees their edit. If it routes to F, they see pre-edit numbers, with every log line reporting success. This is not hypothetical &mdash; it was proven in prod on 2026-09-01: one pod absorbed all 227 edits, a second pod cold-warmed partway through with the ~165 that existed at that moment, and an export three minutes later happened to land on the second pod and streamed the older state.</p>
+
+<p>There are exactly four structural remedies, and it is worth knowing which one you are choosing:</p>
+
+<div class="tbl-wrap">
+<table>
+  <tr><th>Remedy</th><th>How</th><th>Honest limitation</th></tr>
+  <tr><td>Don't replicate</td><td>Move the cache to a shared tier (L3/Redis) so there is one copy</td><td>Adds a network hop to every hit; not viable for a mutable editing overlay</td></tr>
+  <tr><td>Route to the owner</td><td>Sticky-pin all traffic for a key to the replica that holds it</td><td><strong>Narrows the window; cannot close it.</strong> A replica restart, a scale event or a dead pin re-opens it</td></tr>
+  <tr><td>Broadcast invalidation</td><td>Pub/sub; every replica drops the key</td><td>Needs a bus, and delivery is not guaranteed &mdash; a missed message is a permanently stale replica</td></tr>
+  <tr><td>Revalidate on read</td><td>Before serving, ask the source one cheap question: "has anything changed since my copy?"</td><td>One extra round trip per read; needs a monotonic watermark to compare against</td></tr>
+</table>
+</div>
+
+<p>The pairing that actually works, and the one our open proposal lands on, is <strong>route for hit rate, revalidate for correctness</strong>. Affinity is a performance optimisation and must never be load-bearing for truth. The correctness has to live in the read path: one indexed question to Postgres &mdash; "is there an edit newer than what this cache last applied?" &mdash; and replay when the answer is yes.</p>
+
+<div class="note bad">
+  <strong>The general lesson.</strong> If your only defence against staleness is that requests usually land on the right replica, you do not have a correctness mechanism. You have a probability. Write down what happens when the probability fails, and if the answer is "the user silently sees wrong numbers", that is the bug &mdash; not the day it eventually happens.
+</div>
+
+<hr>
+
+<h2 id="map"><span class="n">Part II &middot; 09</span>The map of ours</h2>
+
+<p>With the vocabulary in place, here is the inventory. The backend runs caching at six distinct altitudes; roughly 20 <code>TTLCache</code> instances plus a handful of purpose-built engines.</p>
+
+<h3>Tier A &mdash; the engineered caches</h3>
+
+<div class="tbl-wrap">
+<table>
+  <tr><th>What</th><th>Where</th><th>Key</th><th>Invalidation</th><th>Eviction</th></tr>
+  <tr>
+    <td><strong>PlanCache</strong><br><span class="tag">in-memory DuckDB per open plan</span></td>
+    <td><code>report-builder/services/plan_compute.py</code></td>
+    <td><code>{org}:exec:{execId}:{context}</code></td>
+    <td>Idle TTL + explicit evict + storage generation</td>
+    <td>Idle TTL &rarr; aggregate byte budget, LRU, read-only before editable</td>
+  </tr>
+  <tr>
+    <td><strong>Shared fact-tile store</strong><br><span class="tag">demand-forecast lakehouse path</span></td>
+    <td><code>report-builder/services/tile_cache_registry.py</code></td>
+    <td><code>(org, fact, tile)</code>, tile = month bucket</td>
+    <td>Postgres manifest, ready TTL 24h / pending TTL 10m</td>
+    <td>Blob lifecycle + local file cache</td>
+  </tr>
+  <tr>
+    <td><strong>Plan artifact store</strong><br><span class="tag">blob snapshot of warm storage</span></td>
+    <td><code>report-builder/services/plan_artifact_store.py</code></td>
+    <td><code>{org}/{version}/storage-{digest}.parquet</code></td>
+    <td>Digest over (watermark, freshness, storage-config hash)</td>
+    <td>Immutable per digest; manifest always read live</td>
+  </tr>
+  <tr>
+    <td><strong>Org-dim store</strong><br><span class="tag">product / product_variant dims</span></td>
+    <td><code>report-builder/services/org_dim_store.py</code></td>
+    <td>Org</td>
+    <td>TTL only, 1h, matching the in-process contract</td>
+    <td>TTL</td>
+  </tr>
+  <tr>
+    <td><strong>Data Cache Service (DCS)</strong><br><span class="tag">built, not yet deployed</span></td>
+    <td><code>services/data-cache-service/</code></td>
+    <td>Tile id embedding <code>(schema_version, epoch, watermark)</code></td>
+    <td>Generation &mdash; the key <em>is</em> the invalidation</td>
+    <td>Declared per dataset: BYTE_LRU / IDLE_LRU / COUNT_BOUNDED</td>
+  </tr>
+  <tr>
+    <td><strong>duckdb-base substrate</strong><br><span class="tag">shared engine for both</span></td>
+    <td><code>common/python/duckdb-base/</code></td>
+    <td>Tile = <code>(node, bucket)</code></td>
+    <td>n/a &mdash; owns coverage, single-flight, scope, storage</td>
+    <td>Delegated to the consumer</td>
+  </tr>
+</table>
+</div>
+
+<h3>Tier B &mdash; in-process TTL caches (a representative sample)</h3>
+
+<div class="tbl-wrap">
+<table>
+  <tr><th>Cache</th><th>TTL</th><th>Size</th><th>Guards</th></tr>
+  <tr><td>Prompt store (<code>CachedPromptStore</code>)</td><td>300s</td><td>1024</td><td>A Langfuse fetch per prompt lookup</td></tr>
+  <tr><td>Table-builder response cache</td><td>30s</td><td>128</td><td>Full response for an identical (org, options) ask</td></tr>
+  <tr><td>Table-builder count cache</td><td>60s</td><td>256</td><td>The pagination total &mdash; keyed <em>without</em> sort/page</td></tr>
+  <tr><td>File-exploration parse cache</td><td>30m</td><td>64</td><td>A second blob download + parse across an HITL pause</td></tr>
+  <tr><td>Allocation planner cache</td><td>3600s</td><td>&mdash;</td><td>A ~2s planner LLM call on a deterministic input</td></tr>
+  <tr><td>Data-querier entity loader</td><td>4h</td><td>64</td><td>Entity catalogue reads</td></tr>
+  <tr><td>MFP fiscal-year windows / years / executions</td><td>900s</td><td>256 / 64 / 512</td><td>Calendar resolution per request</td></tr>
+  <tr><td>Attribution reference data</td><td>300s</td><td>256</td><td>Reference lookups inside the attribution engine</td></tr>
+  <tr><td>Execution-summary cache</td><td>300s</td><td>1024</td><td>Re-summarising a settled execution</td></tr>
+  <tr><td>Data-freshness probe</td><td>30s</td><td>per-org</td><td>A per-poll query from 5s FE pollers</td></tr>
+  <tr><td>Scenario rule overlay (TS)</td><td>30s</td><td>Map</td><td>A SELECT per agent invocation</td></tr>
+  <tr><td>Source-definition org cache (TS)</td><td>&mdash;</td><td>Map</td><td>Also de-duplicates concurrent misses into one in-flight query</td></tr>
+</table>
+</div>
+
+<h3>Tier C &mdash; routing, protocol and engine caches</h3>
+
+<div class="tbl-wrap">
+<table>
+  <tr><th>Mechanism</th><th>Layer</th><th>Purpose</th></tr>
+  <tr><td>Scenario affinity cookie store</td><td>web-gateway</td><td>Sticky-route to the replica already holding the warm cache (&sect;16)</td></tr>
+  <tr><td><code>etag</code> + content watermark</td><td>report-builder <code>/plan/state</code></td><td>Let the FE revalidate without re-fetching the grid (&sect;17)</td></tr>
+  <tr><td><code>plan_config_generation</code> counter</td><td>Postgres + web-gateway</td><td>Transactional invalidation signal for replica-held domain configs</td></tr>
+  <tr><td>LLM prefix cache via <code>prompt_cache_key</code></td><td>agents</td><td>Route same-conversation turns to the same provider shard (&sect;18)</td></tr>
+  <tr><td>Databricks SQL result cache</td><td>warehouse</td><td>Free at the engine; explicitly <em>disabled</em> for freshness-critical polls (&sect;19)</td></tr>
+  <tr><td>Spark <code>cache()</code> / <code>persist()</code></td><td>Databricks jobs</td><td>Avoid recomputing a reused DataFrame; policed by lint rules (&sect;19)</td></tr>
+  <tr><td>Databricks warm pool</td><td><code>workers/pool</code></td><td>Not a data cache &mdash; a cache of <em>started clusters</em> (&sect;19)</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2 id="generation"><span class="n">Part III &middot; 10</span>Deep dive: invalidation without eviction</h2>
+
+<p>The cleanest idea in our codebase is in <code>services/data-cache-service/src/domain/keys.py</code>, and it is worth internalising because it generalises far beyond that service.</p>
+
+<p>The problem: you have a fleet of replicas, each with a local cache of shared data. When the data changes, you must ensure no replica serves the old copy. The obvious answer &mdash; broadcast an eviction &mdash; requires a bus, guaranteed delivery, and a story for replicas that were down when the message went out.</p>
+
+<p>The trick is to make the eviction unnecessary. Define a <strong>generation</strong>:</p>
+
+<pre><code>@dataclass(frozen=True, order=True)
+class Generation:
+    epoch: int = 0      # operator flush counter
+    watermark: int = 0  # upstream data version</code></pre>
+
+<p>&hellip;and fold it into the identity of every cached object:</p>
+
+<pre><code>def tile_id(spec, *, org, generation, node="ROOT", bucket="_") -&gt; str:
+    head = (f"{spec.name}/{_slug(org)}"
+            f"/v{spec.schema_version}/e{generation.epoch}/w{generation.watermark}")
+    ...</code></pre>
+
+<p>Now trace what happens on a data change. The upstream pipeline advances the watermark in the coordinator. The next request on <em>any</em> replica recomputes the current generation, which produces a <em>different tile id</em>, which is not in any cache anywhere &mdash; a natural miss, filled from the source. The old tiles are not deleted; they are simply <em>unreferenced</em>, and a blob lifecycle policy reclaims them later at its leisure.</p>
+
+<p>Three properties fall out, and each one removes a class of bug:</p>
+
+<ol>
+  <li><strong>There is no eviction race</strong>, because there is no eviction. You cannot have a replica that missed the message, because there is no message.</li>
+  <li><strong>A stale generation is unreachable</strong>, not merely unpreferred. The old key is no longer derivable from current inputs, so no code path can ask for it by accident.</li>
+  <li><strong>Operator flush is the same mechanism.</strong> A human forcing a refresh bumps <code>epoch</code>; the pipeline publishing new data bumps <code>watermark</code>. Both are "the id changed". One code path, two use cases, no special-casing.</li>
+</ol>
+
+<p>The local on-disk store is keyed the same way &mdash; <code>base_file_name()</code> embeds the generation &mdash; so a generation change opens a <em>new</em> DuckDB file and drops the old one, rather than rebuilding a file that readers may still hold open. That detail is the difference between "correct" and "correct under concurrency".</p>
+
+<p>The same pattern appears twice more in our code, at smaller scale:</p>
+
+<ul>
+  <li><strong><code>PlanCache._storage_generation</code></strong> &mdash; a counter bumped at the end of every method that mutates <code>plan_data_storage</code>. The pivot result-cache key embeds it, so a mutation invalidates every derived pivot <em>with no explicit eviction call</em>. The comment notes the crucial asymmetry: a missed bump would be a correctness bug, so writers err toward bumping.</li>
+  <li><strong><code>plan_config_generation</code></strong> &mdash; a Postgres counter bumped inside the writing transaction of every <code>plan_metric_config</code> change. It replaced <code>MAX(updatedDate)</code>, which had failed in two ways worth remembering: a revert <em>deletes</em> a row and so cannot raise a MAX, and <code>NOW()</code> is transaction-<em>start</em> time, so a slow write could commit a row stamped behind a value a replica had already read.</li>
+</ul>
+
+<div class="note">
+  <strong>Freshness as a pure function.</strong> Our DCS goes one step further: TTL is expressed <em>as</em> a generation. In <code>TTL_ONLY</code> mode the watermark is simply <code>floor(now / ttl)</code> &mdash; a clock tick. Time-based refresh then reuses the exact same invalidation path as event-based refresh, with no timers, no expiry sweep and no second code path to get wrong. Three modes, one mechanism: <code>WATERMARK</code> (upstream publishes), <code>TTL_ONLY</code> (clock tick), <code>IMMUTABLE</code> (fixed at 0 &mdash; a written-once snapshot never refetches).
+</div>
+
+<h2 id="coverage"><span class="n">Part III &middot; 11</span>Deep dive: hierarchy-aware coverage</h2>
+
+<p>Most caches answer "do I have key K?" with a dictionary lookup. Our retail data is hierarchical &mdash; products roll up through department &rarr; class &rarr; subclass, time rolls up through week &rarr; month &rarr; quarter &mdash; and for hierarchical data, exact-key matching leaves enormous hit rate on the table.</p>
+
+<p>A <em>tile</em> is <code>(node, bucket)</code>: a product-hierarchy node at any level, crossed with a fiscal time bucket. Coverage is hierarchy-aware in <strong>both directions</strong>:</p>
+
+<figure>
+<svg viewBox="0 0 640 230" role="img" aria-label="Containment and completeness in a product hierarchy">
+  <style>
+    .nd { fill: none; stroke: currentColor; stroke-width: 1; }
+    .nd.hit { fill: currentColor; fill-opacity: 0.14; }
+    .edge { stroke: currentColor; stroke-width: 1; opacity: 0.4; }
+    .t { font: 11px ui-monospace, Menlo, monospace; fill: currentColor; }
+    .cap { font: italic 12px Georgia, serif; fill: currentColor; opacity: 0.72; }
+  </style>
+
+  <text class="cap" x="8" y="18">down &mdash; containment</text>
+  <rect class="nd hit" x="70" y="30" width="130" height="26" rx="3"/>
+  <text class="t" x="82" y="47">department (cached)</text>
+  <path class="edge" d="M 100 56 L 70 86 M 170 56 L 200 86"/>
+  <rect class="nd" x="14" y="86" width="112" height="26" rx="3"/>
+  <text class="t" x="26" y="103">boys → hit</text>
+  <rect class="nd" x="144" y="86" width="112" height="26" rx="3"/>
+  <text class="t" x="156" y="103">girls → hit</text>
+  <text class="cap" x="8" y="140">an ancestor covers every descendant</text>
+  <text class="cap" x="8" y="158">— loading a hierarchy makes</text>
+  <text class="cap" x="8" y="176">every subset free</text>
+
+  <path class="edge" d="M 320 20 L 320 200" stroke-dasharray="3 4"/>
+
+  <text class="cap" x="352" y="18">up &mdash; completeness</text>
+  <rect class="nd" x="414" y="30" width="150" height="26" rx="3"/>
+  <text class="t" x="426" y="47">department → hit</text>
+  <path class="edge" d="M 444 56 L 414 86 M 534 56 L 564 86"/>
+  <rect class="nd hit" x="358" y="86" width="112" height="26" rx="3"/>
+  <text class="t" x="370" y="103">boys (cached)</text>
+  <rect class="nd hit" x="508" y="86" width="112" height="26" rx="3"/>
+  <text class="t" x="520" y="103">girls (cached)</text>
+  <text class="cap" x="352" y="140">all effective children covered</text>
+  <text class="cap" x="352" y="158">⇒ the parent is covered, served by</text>
+  <text class="cap" x="352" y="176">rolling the children up</text>
+</svg>
+<figcaption>Two directions, one index. Containment is checked eagerly against ancestors; completeness is checked lazily on query by walking the subtree.</figcaption>
+</figure>
+
+<p>Two design decisions in this engine are worth stealing:</p>
+
+<h3>Coverage decides cover-ability; it never aggregates</h3>
+
+<p>It is tempting to have the coverage engine sum children into a parent. That would <strong>silently break every ratio metric</strong> &mdash; AOR, gross-margin %, weeks-of-supply &mdash; because those are weighted averages, not sums. So the engine answers only "can this be served?"; the actual rolling-up happens in the display cascade, which applies the per-metric aggregation declared in <code>plan_metric_config</code>. That config is also handed to the materialization job, which is what guarantees a parent served by rolling up its children is numerically identical to a parent fetched directly.</p>
+
+<p>The general principle: <strong>a cache's hit test and a cache's value computation are different responsibilities.</strong> Merging them is how a caching layer ends up owning business logic, and then disagreeing with the non-cached path.</p>
+
+<h3>Completeness is bucket-aware, so the hierarchy is a dependency</h3>
+
+<p>Assortment is date-windowed &mdash; which products exist in a department depends on <em>when</em>. So "all children present" is a different question in March than in September, and the hierarchy is injected as a dependency and queried per bucket (<code>effective_children(node, bucket)</code>) rather than baked in as a static tree. A child with no in-assortment data for a bucket must never block its parent from being a hit.</p>
+
+<p>Completeness is checked <em>lazily</em>, on query, rather than maintained eagerly as a count-up tree. The trade is a per-query subtree walk &mdash; O(subtree) &mdash; against not having to maintain a bucket-and-assortment-aware promotion structure. For a tree, that is the right trade.</p>
+
+<p>Finally: <strong>non-hierarchy predicates are not tiles.</strong> A product attribute like colour does not decompose along the hierarchy, so a request needing it is planned as a <code>ROOT</code> tile &mdash; "fill the period" &mdash; and post-filtered. That is honest, and it is also dangerous, which is what the scope gate exists for.</p>
+
+<h2 id="singleflight"><span class="n">Part III &middot; 12</span>Deep dive: cluster single-flight and budgets</h2>
+
+<p>Within a replica, single-flight is a lock and a future. Across a fleet, it is a distributed lock &mdash; and the failure modes are all about what happens when the winner dies.</p>
+
+<p>Our <code>ClusterTileReader</code> runs this sequence for a set of missing tiles:</p>
+
+<ol>
+  <li><strong>Read every tile from L3 concurrently.</strong> Anything present is served from blob &mdash; no lock, no coordination.</li>
+  <li><strong>For the rest, take a per-tile cluster lock</strong> with a TTL. Winners proceed; losers become waiters.</li>
+  <li><strong>Winners re-check L3.</strong> A peer may have published between our miss and our acquire. This second check is not redundant &mdash; it is the whole point of check-lock-check.</li>
+  <li><strong>Fetch all still-missing tiles in one unioned warehouse query</strong>, split the result per <code>(node, bucket)</code>, persist each as an immutable Parquet tile, release.</li>
+  <li><strong>Losers poll L3</strong> until the winner publishes &mdash; falling back to a self-fetch if the winner never does, because its lock TTL has by then freed the key.</li>
+</ol>
+
+<p>Three details carry the correctness:</p>
+
+<p><strong>Release in <code>finally</code>, always.</strong> "Always release &mdash; even on failure &mdash; so a transient warehouse error doesn't strand the tile behind a held lock until its TTL." A lock TTL is a safety net for crashes, not a substitute for cleanup on the error path.</p>
+
+<p><strong>Release is fenced by a token.</strong> <code>release(key, token)</code> is a no-op unless the token still owns the lock, so a lock that TTL-expired and was reacquired by someone else cannot be stolen by the original holder waking up late. Without fencing, a slow winner can release a lock it no longer owns and let two replicas fetch simultaneously &mdash; or worse, publish out of order.</p>
+
+<p><strong>The waiter has a takeover path.</strong> Polling with no deadline is a wedge. Polling with a deadline and then <em>giving up</em> is an error the user sees for no good reason. The right shape is poll, then take the lock yourself and do the work, then one last blob read in case somebody beat you to it in that instant.</p>
+
+<h3>The budget, and why reserve-then-refund</h3>
+
+<p>The warehouse is metered, and Databricks is roughly 70% of our Azure bill, so each dataset carries a daily warehouse-query budget. The implementation detail here is a genuinely instructive piece of concurrent reasoning:</p>
+
+<pre><code>total = await self._coord.consume_budget(spec.name, self._today, tiles)
+if total &gt; budget:
+    await self._coord.consume_budget(spec.name, self._today, -tiles)  # refund
+    raise BudgetExceeded(...)</code></pre>
+
+<p>Why not peek first and then consume? Because <strong>peek-then-consume is check-then-act</strong>: two replicas can both observe headroom, both proceed, and together overshoot. <code>INCRBY</code> is atomic, so reserving first is exact. The cost is that the rejection path must compensate &mdash; and it must, because otherwise one oversized rejected request parks the counter above the ceiling and every later request is refused until the day rolls over, despite the warehouse never having been touched.</p>
+
+<p>That is a general pattern for any shared quota: <strong>reserve atomically, refund on rejection</strong>. It is one more line than check-then-act and it is the only version that is correct.</p>
+
+<h2 id="scopegate"><span class="n">Part III &middot; 13</span>Deep dive: the cache that says no</h2>
+
+<p>A cache that accepts every fill request is not a cache, it is a memory leak with a hit rate. Our substrate has an explicit chokepoint &mdash; the <strong>scope gate</strong> &mdash; that every tile load passes through, classifying the ask into one of three tiers:</p>
+
+<div class="tbl-wrap">
+<table>
+  <tr><th>Tier</th><th>Means</th><th>Behaviour</th></tr>
+  <tr><td><code>BASE</code></td><td>Within the default envelope</td><td>Fetch into the shared org base &mdash; byte-budgeted, LRU, reused across executions</td></tr>
+  <tr><td><code>EXTENSION</code></td><td>Beyond the envelope, within hard caps</td><td>Fetch only the delta into a short-TTL slice &mdash; <strong>never promoted into the base</strong></td></tr>
+  <tr><td><code>EXPORT</code></td><td>Beyond the hard caps</td><td>Not an interactive workload. Refuse, and route to an async export</td></tr>
+</table>
+</div>
+
+<p>The middle tier is the interesting one. Without it you have a binary choice between "refuse a legitimate ask" and "let an unusual ask permanently inflate the resident set". <code>EXTENSION</code> says: serve it, but do not let it change what lives here. That is how a full-period <code>ROOT</code> tile &mdash; conjured by an attribute filter that cannot be expressed as a hierarchy tile &mdash; is prevented from silently becoming permanently resident.</p>
+
+<p>The <code>EXPORT</code> tier is equally important and more often skipped. <strong>Some asks are not cache misses, they are the wrong request.</strong> Full history, cross-org, an attribute fill too large to hold &mdash; these are batch workloads, and answering them interactively means either an OOM or a timeout. Naming that case and routing it elsewhere is better engineering than making the cache heroically large.</p>
+
+<p>The report-builder has an analogous and very hard-won version of the same idea. A wide grouped pivot is built inside DuckDB, which can spill to disk &mdash; but <code>.fetchdf().to_dict("records")</code> copies the whole frame onto the Python heap, which cannot. That exact shape OOM-crash-looped prod (exit 137 on a 258k-row network-grain pivot). The fix was a row cap that refuses with a clean, retriable error above a threshold set above every legitimate report and below the pathological case.</p>
+
+<h2 id="plancache"><span class="n">Part III &middot; 14</span>Deep dive: PlanCache and memory governance</h2>
+
+<p><code>PlanCache</code> is the workhorse: one in-process DuckDB instance per open plan, holding the joined fact&times;dim data with the edit overlay replayed on top. It is also where we learned the most about bounding a cache.</p>
+
+<h3>Differentiated TTL</h3>
+
+<pre><code>_CACHE_TTL_PLAN      = 30 * 60   # editing session — keep it warm
+_CACHE_TTL_READ_ONLY =  2 * 60   # read-only view — free memory for others
+_CACHE_TTL_MFP       = 30 * 60   # env-overridable</code></pre>
+
+<p>The insight: <strong>TTL should follow the workload's session shape, not a single global guess.</strong> Someone editing a plan will come back in seconds; someone who opened a read-only report probably will not. Two numbers, materially better behaviour than one.</p>
+
+<h3>Three bounds, because one is never enough</h3>
+
+<p>This is the part worth reading twice, because the layering is the lesson:</p>
+
+<ol>
+  <li><strong>Per-connection</strong> &mdash; DuckDB's <code>memory_limit</code> caps a single runaway plan, spilling to disk. It does <em>not</em> bound the process: <em>N</em> caches reach <em>N</em>&times;limit.</li>
+  <li><strong>Aggregate</strong> &mdash; <code>_enforce_memory_budget</code> sums buffer-managed bytes across every live cache and LRU-evicts idle ones until it is under budget, shedding read-only views before editable plans and never evicting the cache the caller is about to use.</li>
+  <li><strong>Disk</strong> &mdash; spill is capped per connection <em>and</em> governed globally, because every cache spills to the same ephemeral disk and a finished pivot's temp files persist until its cache is evicted (measured live at ~7GB for one warm demand-forecast cache). Two guards: a semaphore limiting concurrent spill-heavy builds, and a disk-fit check that shrinks the admissible row count as the disk fills.</li>
+</ol>
+
+<div class="note bad">
+  <strong>The trap that cost us two environments.</strong> A <code>memory_limit</code> on an in-memory DuckDB only spills when a writable <code>temp_directory</code> is also set. Without one it is not a soft ceiling &mdash; it becomes a <em>hard OOM error</em> ceiling. So <code>memory_limit</code> is applied only when the spill directory is verified usable, and otherwise we leave DuckDB at its default and log loudly. A knob that means one thing with a companion setting and the opposite without it is the kind of thing you find out about in production.
+</div>
+
+<h3>Two operational rules earned the hard way</h3>
+
+<p><strong>Never evict a cache that is in use.</strong> Eviction calls <code>con.close()</code>, and closing a connection a worker thread is still driving produces intermittent <code>Connection already closed</code> failures. The sweep skips in-use caches, and re-checks in-use immediately before closing, because state can flip between the scan and the close. A stale-but-busy cache is simply left for a later sweep.</p>
+
+<p><strong>An operator env override must never raise.</strong> These knobs are human-set, at 2am, under pressure. A value like <code>16Gi</code> through a bare <code>int()</code> takes the whole service down at import time. Every override in this module parses defensively, warns, and falls back to the default &mdash; and clamps nonsense (a zero cache bound would make the LRU sweep evict the very entry being inserted, handing the caller the name of a just-dropped table).</p>
+
+<h3>And the incident that set the default</h3>
+
+<p>The MFP cache TTL default was once raised to 24 hours. It OOM-crash-looped <strong>both prod and uat within hours</strong>: each MFP cache holds a DuckDB up to <code>memory_limit</code>, and with idle eviction effectively gone they accumulated past the container. The aggregate budget did not save it &mdash; that sweep only evicts <em>idle</em> caches, refreshes its estimates lazily, and cannot shed a single oversized one. The default went back to 30 minutes with a comment that reads, in full: do not raise this until the reaper evicts <em>before</em> DuckDB OOMs.</p>
+
+<p>The generalisable lesson: <strong>a longer TTL is a bigger cache.</strong> They are the same knob wearing different clothes, and if your capacity bound has any hole in it, extending retention is what finds the hole.</p>
+
+<h2 id="blob"><span class="n">Part III &middot; 15</span>Deep dive: the shared blob tiers</h2>
+
+<p>Three separate mechanisms move per-replica work into shared storage, and together they are the clearest example in our codebase of L3 doing its job.</p>
+
+<h3>The tile manifest &mdash; warm once, cluster-wide</h3>
+
+<p>The in-memory coverage index knows nothing about other replicas, so ten replicas warm the same month tile ten times. The manifest replaces it with a Postgres row per <code>(org, fact, tile)</code>, claimed atomically:</p>
+
+<pre><code>INSERT INTO tile_manifest (...) VALUES (..., 'pending')
+ON CONFLICT ("orgId", fact, tile) DO NOTHING</code></pre>
+
+<p>The single successful inserter becomes the cluster-wide warmer; it fetches, writes the Parquet, and flips the row to <code>ready</code> with the object URI. Everyone else reads the manifest and serves from the shared file. Two TTLs make it self-healing: a <code>ready</code> row older than 24h is re-claimed for a fresh warm, and a <code>pending</code> row older than 10 minutes is treated as an orphaned crashed warmer and re-claimed &mdash; so a dead warmer never wedges a tile forever.</p>
+
+<p>The empty-window case is handled explicitly rather than by omission: an empty window records <code>ready</code> with <code>uri = NULL</code>, so the serve path never unions an empty or mistyped Parquet with a real one.</p>
+
+<h3>The plan artifact store &mdash; sharing a warm</h3>
+
+<p>A cold MFP warm measured 173s in prod, of which 42s was the warehouse query, 33s the DuckDB load, and 74s the overlay replay. The artifact store snapshots the post-join, post-replay storage table to Parquet on blob; the next replica to cold-warm the same plan version downloads it instead. Measured on dev: 102.3s &rarr; 53.7s, then to ~20s with an Arrow read.</p>
+
+<p>The two design choices that make it safe:</p>
+
+<ul>
+  <li><strong>The mutable manifest is always read from blob, never from a local cache; the immutable parquet is safe to cache locally.</strong> Splitting mutable pointer from immutable payload is the general move &mdash; it is the same shape as a content-addressed store.</li>
+  <li><strong>Validity is exact, not heuristic.</strong> The digest covers (watermark, freshness, storage-config hash), so a stale locally-cached parquet can never be paired with a newer manifest. If any component differs, the artifact is ignored and the warm proceeds cold.</li>
+</ul>
+
+<p>Edits made after the snapshot are replayed incrementally, which works only because <code>plan_edit</code> is append-only with a monotonic <code>sequenceNo</code> and replay is last-wins &mdash; so the manifest's watermark bounds a delta replay exactly. <strong>Append-only plus monotonic sequence is what makes incremental catch-up sound.</strong> Without both, you are guessing.</p>
+
+<h3>Prewarm &mdash; and the loop that must not run forever</h3>
+
+<p>The first warm after a data change is still paid by whoever opens the book first. A periodic sweep detects that the shared artifact no longer matches current freshness and re-runs the warm off the user path.</p>
+
+<p>Coordination is <strong>claim-based, not lock-based</strong>: a replica takes a per-(org, version, freshness-digest) claim by exclusive-create (<code>upload_blob(overwrite=False)</code> on Azure, <code>O_CREAT|O_EXCL</code> locally &mdash; both atomic). There is deliberately no lease to leak. A crashed claimant orphans its claim, which is re-claimed once it ages past a retry window; a lost race costs nothing, because the loser's next sweep sees the winner's fresh manifest and skips.</p>
+
+<p>And the guard that makes it safe to run at all: a warm that <em>cannot publish</em> would otherwise loop forever, because the staleness probe never goes true. So the sweep asks its warm whether publishing was even possible, and if not, retires that freshness digest until the data actually moves. <strong>Any self-triggering background loop needs an answer to "what if the work never satisfies the trigger?"</strong> &mdash; and "the interval paces it" is not an answer, it is a slower version of the same runaway.</p>
+
+<h2 id="affinity"><span class="n">Part III &middot; 16</span>Deep dive: routing as a hit-rate strategy</h2>
+
+<p>If a cache is per-replica, the load balancer is part of your caching system whether you designed it that way or not. Our web-gateway makes it explicit: it captures Azure Container Apps' session-affinity cookie from report-builder and replays it, so subsequent calls for the same routing key land on the replica that already holds the warm cache.</p>
+
+<p>Three things here are worth generalising.</p>
+
+<p><strong>The routing key is workload-dependent.</strong> Demand-forecast fact reads pin by <em>org</em>, because the tile cache is per-org and every scenario of that org can reuse one warm copy. Edit and mutation calls pin by <em>scenario</em>. The store itself is key-agnostic; the caller chooses. Pinning at the wrong granularity either fragments the cache (too fine) or forces unrelated work onto one replica (too coarse).</p>
+
+<p><strong>Some pins belong to the data, not the browser.</strong> For MFP, the cookie is persisted on the scenario row and preferred over the per-browser token, so <em>every user of the same plan</em> converges on the single replica holding the warm cache. That is a deliberate per-workload decision &mdash; MFP's cold build is far too expensive to run once per browser &mdash; and the code says so explicitly, because adding a context to that set changes who shares a replica.</p>
+
+<p><strong>Pins go stale in ways you have to design for.</strong> Verified against prod ingress: a request with <em>no</em> cookie gets a fresh <code>Set-Cookie</code>; a request with a cookie pointing at a <em>dead</em> replica is served silently by round-robin with <strong>no re-issue</strong>. So a pin can never heal by replay alone. That forces three mechanisms: replica-mismatch detection, a maximum pin age (6h default) after which the request deliberately goes out cookie-less to get a fresh pin, and a refresh of the "last known good" timestamp &mdash; because the only writer is guarded on "cookie changed", and in steady state nothing changes, so a healthy heavily-used pin was aging out as if abandoned.</p>
+
+<div class="note">
+  <strong>The framing that matters.</strong> All of this is a <em>hit-rate</em> mechanism. Sticky routing is never a correctness mechanism, because "usually the right replica" is a probability, and the failure mode of that probability is a silent wrong answer. Our own proposal states it plainly: routing affinity only narrows the window; it cannot close it, because eviction is process-local and there is no notify channel.
+</div>
+
+<h2 id="watermark"><span class="n">Part III &middot; 17</span>Deep dive: telling the client it is stale</h2>
+
+<p>The browser is a cache too, and it needs to be told when to let go. Our <code>/plan/state</code> endpoint returns two things: a plain <code>etag</code>, and a <strong>content watermark</strong> &mdash; one hash over every input that can change a <code>/plan/data</code> response.</p>
+
+<p>The interesting part is the list of axes, because assembling it is exactly the &sect;3 key-completeness exercise done at the protocol level:</p>
+
+<div class="tbl-wrap">
+<table>
+  <tr><th>Axis</th><th>Why it is in the hash</th></tr>
+  <tr><td><code>plan_version_id</code></td><td>A stage transition is new content even at the same edit sequence &mdash; the plain etag hashes execution+seq only, so two versions at seq N collide</td></tr>
+  <tr><td><code>max_seq</code></td><td>Every committed edit</td></tr>
+  <tr><td><code>config_generation</code></td><td>A metric-config change alters shapes without touching any other axis</td></tr>
+  <tr><td><code>config_shape</code></td><td>The <em>served</em> domain's own editable-metric list &mdash; closes the generation counter's poll-lag window</td></tr>
+  <tr><td><code>freshness</code></td><td>The nightly actualize/seed moves source stamps with no edit and no config change</td></tr>
+  <tr><td><code>context</code></td><td>Two contexts of one execution must not share a watermark</td></tr>
+</table>
+</div>
+
+<p>Two details from this code are broadly applicable.</p>
+
+<p><strong>A <code>None</code> component hashes as null rather than being dropped</strong>, so "became known" is itself a change. Dropping unknowns silently merges two genuinely different states.</p>
+
+<p><strong>Belt and braces on a polled signal.</strong> <code>config_generation</code> is the process's <em>polled</em> value, so it lags by up to 15 seconds. <code>config_shape</code> rides beside it precisely because it changes the instant the process actually serves different config. A change visible in neither is covered by the counter alone and can read "unchanged" for up to one poll interval &mdash; and the code is explicit that this is a bounded, self-healing delay in <em>detection</em>, never a wrong page served forever. Being able to write that sentence about your own cache is the bar.</p>
+
+<h2 id="llm"><span class="n">Part III &middot; 18</span>Deep dive: caching a language model</h2>
+
+<p>LLM calls are slow and metered, so they are prime caching targets &mdash; but there are two entirely different things to cache, and conflating them is a common mistake.</p>
+
+<h3>Prefix caching (the provider's cache, of tokens)</h3>
+
+<p>Providers cache the <em>prefix</em> of a prompt: if your next request starts with the same ~1024+ tokens, the provider skips recomputing that prefix and bills it at a discount. You do not store anything; you shape your prompts so the stable part comes first, and you help the provider's router send you back to the same shard.</p>
+
+<p>That last part is what <code>prompt_cache_key</code> does. Ours binds it for the OpenAI-family and Anthropic-on-Foundry providers, keyed by (org, execution), so turns from one conversation route to the same shard:</p>
+
+<pre><code>_PROMPT_CACHE_KEY_PROVIDERS = frozenset(
+    {LLMProvider.AZURE_OPENAI, LLMProvider.OPENAI, LLMProvider.ANTHROPIC_FOUNDRY}
+)</code></pre>
+
+<p>Measured effect: ~98.7% prefix-cache hit rate on a 17.6K-token classifier prefix. Note the deliberate omission &mdash; Gemini is skipped, because binding an unknown kwarg risks a silent drop or a runtime error. And the binding is wrapped so that <em>any</em> failure falls back to the unbound client: caching then works by prefix hash alone, just at a lower hit rate. <strong>An optimisation must degrade to "slower", never to "broken".</strong></p>
+
+<p>The companion is measurement: <code>extract_cached_tokens</code> reads <code>cached_tokens</code> from both the raw OpenAI usage shape and LangChain's normalised one, and never raises &mdash; telemetry must not break the request. A cache you cannot measure is a cache you cannot tune.</p>
+
+<h3>Response caching (your cache, of answers)</h3>
+
+<p>Entirely separate: storing the model's <em>output</em> for an identical input. Our allocation planner does this, and its docstring is a model of how to justify caching a stochastic system:</p>
+
+<ul>
+  <li><strong>Determinism argument.</strong> The model accepts no temperature parameter and returns structured output, so the same input produces near-deterministic output.</li>
+  <li><strong>Key design.</strong> <code>(org_id, exec_id, scenario_id, hash(user_message))</code> &mdash; where <code>scenario_id</code> doubles as a config-hash proxy, because the config wrappers mint a fresh scenario id whenever rules change. Config updates therefore invalidate the cache <em>naturally</em>, with no explicit hash field. (That is the &sect;10 generation trick again, arrived at independently.)</li>
+  <li><strong>Honest trade.</strong> "Caching may shadow rare drift across calls &mdash; acceptable: the user gets a consistent plan across replays even if not always the global optimum." Stating what you are giving up is what makes it a decision rather than an accident.</li>
+  <li><strong>Scope stated.</strong> In-process per uvicorn worker, no cross-worker coordination &mdash; and explicitly orthogonal to provider prefix caching, which targets the prompt discount rather than the response.</li>
+</ul>
+
+<h2 id="engine"><span class="n">Part III &middot; 19</span>Engine-level caches we merely configure</h2>
+
+<h3>Spark <code>cache()</code> / <code>persist()</code></h3>
+
+<p>Spark is lazy: a DataFrame is a plan, and every action re-executes it. If you use one DataFrame twice, you compute it twice &mdash; so you <code>cache()</code> it. Two rules are enforced by lint in our repo, and both are about the failure mode rather than the benefit.</p>
+
+<p><strong><code>cache-without-unpersist</code></strong> flags every <code>.cache()</code> as a reminder to pair it with <code>.unpersist()</code>, ideally in a <code>try/finally</code>. Interestingly, most of our suppressions are legitimate and each carries a written justification &mdash; "batch job, Spark session releases cache at job end", "unpersisted each iteration below", "unpersisted in finally block at function exit". That is the right use of a lint rule: not to forbid, but to force an explicit answer.</p>
+
+<p><strong><code>persist-memory-only</code></strong> is the sharper one. <code>StorageLevel.MEMORY_ONLY</code> evicts partitions when the executor heap fills and then <em>recomputes them from scratch</em> on next access &mdash; a recomputation spiral precisely when the cluster is under memory pressure. <code>MEMORY_AND_DISK</code> (the default for <code>.cache()</code>) spills instead. This is the general hazard of any cache that <em>recomputes</em> rather than <em>degrades</em> on eviction: its worst behaviour arrives exactly when you can least afford it.</p>
+
+<h3>Databricks SQL warehouse result cache</h3>
+
+<p>The warehouse caches query results for free. Free is good until a status poll needs to reflect the newest write and gets an answer from thirty seconds ago. Our TypeScript driver supports opting out per query &mdash; and the careful part is not the opt-out, it is the cleanup:</p>
+
+<blockquote>Restore the session default before it returns to the pool. If the reset fails, DESTROY the session instead of releasing it: a pooled session left with <code>use_cached_result=false</code> would silently disable caching for unrelated queries that later reuse it.</blockquote>
+
+<p>That is the pooled-resource hazard in one sentence. <strong>Any per-session setting you change on a borrowed resource must be restored, and a failed restore means destroy, not return.</strong></p>
+
+<h3>Caches that hold compute, not data</h3>
+
+<p>Two of ours cache <em>started things</em> rather than results, and they obey the same four questions:</p>
+
+<ul>
+  <li><strong>The Databricks warm pool</strong> (<code>workers/pool</code>) holds started clusters that claim executions, turning a multi-minute cluster start into a claim. Its "eviction" is a recycle policy bounding executions and age to cap driver memory creep; its "invalidation" is generation-based &mdash; a replica whose wheelhouse tag no longer matches the deployed one keeps serving while a replacement generation grows underneath it, and leaves only once the replacement is running. If the new generation cannot boot, the floor is never met, nothing sheds, and the fleet keeps serving the previous code rather than draining to zero. That is a cache with a deliberately conservative eviction policy, and the reasoning is exactly right.</li>
+  <li><strong>Connection and session pools</strong> are caches of expensive handshakes, with all the same hazards &mdash; the result-cache leak above is a pool-hygiene bug, not a query bug.</li>
+</ul>
+
+<h3>Build-time caches (the ones that bite during deploys)</h3>
+
+<p>Two of our most annoying recurring failures are caching problems wearing a different hat:</p>
+
+<ul>
+  <li><strong>Package resolution.</strong> Consumers pip-install our common packages from a published wheel. If a source change ships without a version bump, every consumer silently resolves the <em>stale</em> wheel and crashes at runtime with <code>ModuleNotFoundError</code> or <code>AttributeError</code> the moment it reaches the new code path. The registry is the cache; the version is the key; a missing bump is a key collision between two different contents. (This is why the bump is CI-owned, computed from the registry's actual latest published version.)</li>
+  <li><strong>Container images.</strong> <code>./dev up</code> never rebuilds, so new common-package symbols need an explicit targeted rebuild. Same shape: a cached artifact keyed by something that did not change when the content did.</li>
+</ul>
+
+<p>Both are the &sect;3 rule &mdash; the key must include everything that shapes the content &mdash; applied to build artifacts instead of rows.</p>
+
+<hr>
+
+<h2 id="failures"><span class="n">Part IV &middot; 20</span>Every way ours have failed</h2>
+
+<p>This is the section to actually remember. Each of these is a real production incident or a review finding pattern from our own codebase, generalised.</p>
+
+<h3>1. The key was incomplete (31 findings, the largest family)</h3>
+<p>Covered in &sect;3. The tell is always the same: a cache key that names <em>what</em> is being asked for but not <em>how</em> it is being narrowed. The fix is not cleverness, it is a discipline: at the lookup site, enumerate every parameter that reaches the loader, and justify each exclusion out loud.</p>
+
+<h3>2. Cross-replica staleness &mdash; three tickets, one defect</h3>
+<p>The defining example. Nine warm strategies exist; only three set <code>was_cold = True</code>; the overlay replay is fenced behind <code>if was_cold:</code>. The other five reuse the replica's copy untouched. Ten replicas, no invalidation channel.</p>
+<div class="tbl-wrap">
+<table>
+  <tr><th>Ticket</th><th>Surface</th><th>Outcome</th></tr>
+  <tr><td>RT1-4091</td><td>publish / approve write-back</td><td>Fixed narrowly &mdash; a resync primitive wired to two call sites</td></tr>
+  <tr><td>RT1-4170</td><td>grid read</td><td>Unfixed &mdash; a stickier-routing PR was proposed and closed</td></tr>
+  <tr><td>RT1-4500</td><td>export</td><td>The current change</td></tr>
+</table>
+</div>
+<p>The lesson is about <em>diagnosis</em>, not code. A fix wired to "the call sites we know about" is not a fix, it is a deferral, and the ticket count is how you find out. The generalisable rule: when you add a correctness primitive, the follow-up question is always "what enforces that every path calls it?" &mdash; and if the answer is "reviewers", expect occurrence number three.</p>
+
+<h3>3. Unbounded retention &rarr; OOM crash loop</h3>
+<p>The 24h MFP TTL. Two environments down within hours. See &sect;14. <strong>A longer TTL is a bigger cache.</strong></p>
+
+<h3>4. A per-item limit mistaken for a process limit</h3>
+<p><code>memory_limit</code> caps one DuckDB instance; <em>N</em> caches reach <em>N</em>&times;limit. Same for disk: <code>max_temp_directory_size</code> caps one connection's spill, while every cache spills to the same disk and finished pivots hold their spilled blocks until eviction. Always ask separately what bounds the aggregate.</p>
+
+<h3>5. The ceiling that was actually a cliff</h3>
+<p><code>memory_limit</code> without a writable <code>temp_directory</code> is a hard OOM error, not a spill. A setting whose semantics invert depending on a companion setting.</p>
+
+<h3>6. Timeout that stopped waiting without cleaning up</h3>
+<p>A warm acquires a DuckDB backend, cursors and temp files. A timeout that merely stops waiting leaks all three. The rule: <strong>on timeout, cancel the work, release the backend, drop the temp files, and resolve to a failure</strong> &mdash; never to a success, and never to an empty-but-valid result. The in-process analogue is the single-flight future that never settles (&sect;6).</p>
+
+<h3>7. Evicting a cache someone was using</h3>
+<p>Intermittent <code>Connection already closed</code>. The sweep now skips in-use caches and re-checks immediately before close.</p>
+
+<h3>8. Caching a fallback under the real key</h3>
+<p>A request for a plan version that did not exist yet fell back, and left the fallback data under the selector-scoped key for the next caller, for whom the version did exist.</p>
+
+<h3>9. A stale invalidation signal</h3>
+<p><code>MAX(updatedDate)</code> as a config-change signal missed two cases outright: a revert <em>deletes</em> a row and cannot raise a MAX, and <code>NOW()</code> is transaction-start time so a slow write could commit a row stamped behind a value a replica had already read. Replaced by an explicit counter bumped in the writing transaction.</p>
+
+<h3>10. Reusing a snapshot older than its retention</h3>
+<p>Snapshot rows are garbage-collected on a 30-day TTL. Reusing a <code>Completed</code> execution whose rows were collected opens the grid empty, with no error. <strong>Any cross-reference to data with a retention policy needs an age bound of its own.</strong></p>
+
+<h3>11. Self-referential recompute (a domain-specific classic)</h3>
+<p>A metric protects a seeded value with a self-guarding formula &mdash; <code>COALESCE(NULLIF("&lt;self&gt;", 0), &lt;derivation&gt;)</code> &mdash; so the warm sweep reads the value back unchanged. The trap: the <em>same</em> string is used to recompute on edit, where the guard makes the recompute a no-op. That shipped: editing Sales Units never moved Sales $. The general shape is a memoised expression whose memoisation makes its own update path inert &mdash; and the fix was to give the edit path its own unguarded form.</p>
+
+<h3>12. Cached identity that nothing else references</h3>
+<p>A widget fork gets a new id nothing references; the read path fetches by the original id only, so the customisation is orphaned. Not a cache in the strict sense, but the same failure: two copies of a thing, one identity, and a read path that resolves the wrong one.</p>
+
+<hr>
+
+<h2 id="checklist"><span class="n">Part V &middot; 21</span>The checklist</h2>
+
+<p>Before adding a cache, or reviewing one, answer these in writing. If any answer is "I'm not sure", that is the bug you are about to ship.</p>
+
+<h4>Key</h4>
+<ul>
+  <li>List every parameter that reaches the loader. For each one not in the key, justify the exclusion.</li>
+  <li>Does anything in the key derive from <code>now()</code>? If so, is the resolved value in the key, or is it re-checked on read?</li>
+  <li>Could a request ever store a <em>fallback</em>, <em>provisional</em> or <em>partial</em> result under this key?</li>
+  <li>If there is an "already loaded" short-circuit, does it re-validate the shaping inputs, or does it just check a boolean?</li>
+</ul>
+
+<h4>Invalidation</h4>
+<ul>
+  <li>State the maximum staleness in seconds, out loud.</li>
+  <li>Can the writer bump a counter in its own transaction? If yes, prefer a generation over an event.</li>
+  <li>If the data is shared and the cache is per-replica: what makes the other replicas correct? ("Sticky routing" is not an answer.)</li>
+  <li>Are negative results cached distinctly from absence?</li>
+  <li>If many keys share a TTL, is there jitter?</li>
+</ul>
+
+<h4>Capacity</h4>
+<ul>
+  <li>What bounds a single entry? What bounds the <em>aggregate</em>? These are different questions.</li>
+  <li>Are entry sizes uniform? If not, bound bytes, not count.</li>
+  <li>Does eviction <em>degrade</em> (spill, re-fetch) or <em>recompute</em>? Recompute-on-evict is worst exactly under pressure.</li>
+  <li>Can eviction race with a reader? What holds the entry alive while it is in use?</li>
+  <li>Does any tunable come from an env var? Does a malformed value warn and fall back, or crash at import?</li>
+</ul>
+
+<h4>Misses and lifecycle</h4>
+<ul>
+  <li>If 100 callers miss the same key at once, how many do the work?</li>
+  <li>Is the lock held across the fetch? (It must not be.)</li>
+  <li>If the single-flight winner crashes or is cancelled, what un-wedges the waiters? Is the release fenced by a token?</li>
+  <li>On timeout: is the work cancelled, the resource released, the temp state dropped, and the result a failure?</li>
+  <li>If there is a background warm loop, what stops it if the warm can never publish?</li>
+</ul>
+
+<h4>Observability</h4>
+<ul>
+  <li>Can you see the hit rate? The entry count? The total bytes against the budget?</li>
+  <li>Can you tell a hit from a miss in a trace?</li>
+  <li>When it serves something stale, how would you ever find out?</li>
+</ul>
+
+<p>That last question is the one that matters most. Every other failure mode announces itself &mdash; a slow page, an OOM, a crash loop. Staleness does not. It is the only one you have to go looking for, which is why it is the only one worth building the machinery to detect.</p>
+
+<hr>
+
+<p class="foot">Written from the <code>retail-agents-backend</code> source as of 2026-09-13. Line-level details (TTLs, budgets, tier names) are accurate to that snapshot and will drift; the reasoning behind them is the durable part. Two caveats worth carrying: the Data Cache Service in &sect;9&ndash;13 is implemented and unit-tested but is <em>not yet deployed</em> &mdash; it has no Terraform module or CI deploy wiring &mdash; and the shared fact-tile path in report-builder is gated per context by a <code>fact_source</code> flag rather than being the global read path. <a href="/learning/">&larr; /learning/</a></p>
+
+</body>
+</html>
