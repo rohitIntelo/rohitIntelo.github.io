@@ -1,0 +1,855 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Everything is a tree — data hierarchy from scratch</title>
+<meta name="description" content="A beginner's guide to hierarchical data: trees, levels, grain, rollup — then how product, location and time hierarchies actually work in the Intelo lakehouse.">
+<style>
+  :root {
+    --bg: #fdfdfc;
+    --fg: #1a1a18;
+    --muted: #6b6b66;
+    --rule: #d8d8d2;
+    --accent: #8a5a2b;
+    --code-bg: #f3f2ee;
+    --card: #f8f7f4;
+    --warn: #8f3a2f;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #16161a;
+      --fg: #e6e6e2;
+      --muted: #9a9a94;
+      --rule: #32323a;
+      --accent: #d6a06a;
+      --code-bg: #1f1f25;
+      --card: #1c1c22;
+      --warn: #e08c7a;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--bg); color: var(--fg); }
+  body {
+    max-width: 46rem;
+    margin: 0 auto;
+    padding-block: 3.5rem 5rem;
+    padding-left: 1.25rem;
+    padding-right: 1.25rem;
+    font: 17px/1.65 Georgia, 'Iowan Old Style', 'Times New Roman', serif;
+    -webkit-text-size-adjust: 100%;
+  }
+  h1 {
+    font-size: 1.85rem;
+    line-height: 1.2;
+    font-weight: normal;
+    margin: 0 0 0.4rem;
+    letter-spacing: -0.01em;
+  }
+  .sub { color: var(--muted); font-style: italic; margin: 0 0 2rem; }
+  h2 {
+    font-size: 1.25rem;
+    font-weight: normal;
+    margin: 3rem 0 0.75rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--rule);
+    letter-spacing: -0.01em;
+  }
+  h2 .n {
+    font: 600 0.7rem/1 ui-monospace, Menlo, monospace;
+    color: var(--accent);
+    letter-spacing: 0.12em;
+    display: block;
+    margin-bottom: 0.5rem;
+    text-transform: uppercase;
+  }
+  h3 { font-size: 1.02rem; font-weight: 600; margin: 1.75rem 0 0.4rem; }
+  h4 { font-size: 0.95rem; font-weight: 600; margin: 1.25rem 0 0.3rem; color: var(--muted); }
+  p { margin: 0 0 1rem; }
+  a { color: var(--fg); text-decoration-color: var(--accent); text-underline-offset: 2px; }
+  code, pre {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  code {
+    font-size: 0.85em;
+    background: var(--code-bg);
+    padding: 0.1em 0.35em;
+    border-radius: 3px;
+    word-break: break-word;
+  }
+  pre {
+    background: var(--code-bg);
+    border-left: 2px solid var(--accent);
+    padding: 0.9rem 1rem;
+    overflow-x: auto;
+    font-size: 0.8rem;
+    line-height: 1.55;
+    margin: 0 0 1.25rem;
+  }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  ul, ol { padding-left: 1.3rem; margin: 0 0 1rem; }
+  li { margin-bottom: 0.5rem; }
+  .lede {
+    font-size: 1.08rem;
+    border-left: 2px solid var(--accent);
+    padding-left: 1rem;
+    margin: 0 0 2rem;
+  }
+  .note {
+    background: var(--card);
+    border: 1px solid var(--rule);
+    border-radius: 4px;
+    padding: 1rem 1.15rem;
+    margin: 0 0 1.25rem;
+    font-size: 0.95rem;
+  }
+  .note strong { color: var(--accent); }
+  .note.bad strong { color: var(--warn); }
+  .note p:last-child { margin-bottom: 0; }
+  .tbl-wrap { overflow-x: auto; margin: 0 0 1.25rem; }
+  table { border-collapse: collapse; width: 100%; font-size: 0.88rem; }
+  th, td {
+    text-align: left;
+    padding: 0.55rem 0.7rem;
+    border-bottom: 1px solid var(--rule);
+    vertical-align: top;
+  }
+  th {
+    font-weight: 600;
+    border-bottom: 1px solid var(--fg);
+    white-space: nowrap;
+  }
+  td code { font-size: 0.8em; }
+  figure { margin: 0 0 1.5rem; }
+  figure svg { display: block; width: 100%; height: auto; max-width: 100%; }
+  figcaption { color: var(--muted); font-size: 0.85rem; font-style: italic; margin-top: 0.5rem; }
+  .toc {
+    background: var(--card);
+    border: 1px solid var(--rule);
+    border-radius: 4px;
+    padding: 1.1rem 1.3rem 0.9rem;
+    margin: 0 0 2.5rem;
+    font-size: 0.92rem;
+  }
+  .toc ol { margin: 0.4rem 0 0; padding-left: 1.2rem; }
+  .toc li { margin-bottom: 0.25rem; }
+  .toc > strong { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--accent); font-family: ui-monospace, Menlo, monospace; }
+  hr { border: 0; border-top: 1px solid var(--rule); margin: 3rem 0 2rem; }
+  .foot { color: var(--muted); font-size: 0.88rem; }
+  blockquote { margin: 0 0 1.25rem; padding-left: 1rem; border-left: 2px solid var(--rule); color: var(--muted); font-style: italic; }
+  .tag { font: 0.7rem/1.4 ui-monospace, Menlo, monospace; color: var(--muted); display: block; margin-top: 0.15rem; }
+  dl { margin: 0 0 1.25rem; }
+  dt { font-weight: 600; margin-top: 0.9rem; font-size: 0.95rem; }
+  dd { margin: 0.15rem 0 0; padding-left: 0; color: var(--fg); }
+</style>
+</head>
+<body>
+
+<h1>Everything is a tree</h1>
+<p class="sub">Data hierarchy from scratch &mdash; the vocabulary, the three axes, how you actually store a tree in a database, and what breaks when the tree isn't really a tree.</p>
+
+<p class="lede">You cannot plan one T-shirt. You plan <em>Women's Knit Tops</em>, and the plan has to land on the individual shirts. Everything difficult about retail data comes from moving between those two altitudes &mdash; and the structure that connects them is a hierarchy. This guide assumes you know nothing about them and ends with you able to read our schema.</p>
+
+<div class="toc">
+  <strong>Contents</strong>
+  <ol>
+    <li><a href="#tree">A tree, and eight words</a></li>
+    <li><a href="#rule">The one rule that makes it a hierarchy</a></li>
+    <li><a href="#axes">The three axes of a retail fact</a></li>
+    <li><a href="#grain">Grain &mdash; the most useful word here</a></li>
+    <li><a href="#rollup">Rollup, drilldown, and the aggregation trap</a></li>
+    <li><a href="#ours">Ours, concretely: four real orgs</a></li>
+    <li><a href="#config">The hierarchy is configuration, not code</a></li>
+    <li><a href="#node">A node <em>is</em> its path</a></li>
+    <li><a href="#storage">How you store a tree in a database</a></li>
+    <li><a href="#prebuilt">Pre-aggregation: eight levels of one fact</a></li>
+    <li><a href="#express">Case study: when the tree isn't a tree</a></li>
+    <li><a href="#traps">Nine more ways hierarchies bite</a></li>
+    <li><a href="#notatree">Things that look like hierarchies and aren't</a></li>
+    <li><a href="#glossary">Glossary and checklist</a></li>
+  </ol>
+</div>
+
+<h2 id="tree"><span class="n">Part I &middot; 01</span>A tree, and eight words</h2>
+
+<p>A hierarchy is a <strong>tree</strong>: things contained inside bigger things, all the way up to one thing that contains everything.</p>
+
+<p>You already use several. A file system: files inside folders inside folders inside a drive. A company: people inside teams inside departments. An address: house inside street inside city inside country. Same shape every time.</p>
+
+<p>Here is the whole vocabulary. Eight words, and you will meet every one of them in our code:</p>
+
+<figure>
+<svg viewBox="0 0 640 300" role="img" aria-label="A product tree with its parts labelled: root, node, leaf, edge, depth, path">
+  <style>
+    .bx { fill: none; stroke: currentColor; stroke-width: 1; }
+    .bx.lf { stroke-dasharray: 0; fill: currentColor; fill-opacity: 0.08; }
+    .ed { stroke: currentColor; stroke-width: 1; opacity: 0.45; fill: none; }
+    .tx { font: 11px ui-monospace, Menlo, monospace; fill: currentColor; }
+    .an { font: italic 11px Georgia, serif; fill: currentColor; opacity: 0.7; }
+    .dp { font: 10px ui-monospace, Menlo, monospace; fill: currentColor; opacity: 0.5; }
+    .gd { stroke: currentColor; stroke-width: 1; opacity: 0.18; stroke-dasharray: 2 4; }
+  </style>
+
+  <line class="gd" x1="120" y1="28" x2="640" y2="28"/>
+  <line class="gd" x1="120" y1="100" x2="640" y2="100"/>
+  <line class="gd" x1="120" y1="172" x2="640" y2="172"/>
+  <line class="gd" x1="120" y1="244" x2="640" y2="244"/>
+
+  <text class="dp" x="8" y="32">depth 0</text>
+  <text class="dp" x="8" y="104">depth 1</text>
+  <text class="dp" x="8" y="176">depth 2</text>
+  <text class="dp" x="8" y="248">depth 3</text>
+
+  <rect class="bx" x="250" y="14" width="100" height="28" rx="3"/>
+  <text class="tx" x="272" y="32">APPAREL</text>
+  <text class="an" x="362" y="32">← root</text>
+
+  <path class="ed" d="M 285 42 L 200 86 M 315 42 L 400 86"/>
+
+  <rect class="bx" x="150" y="86" width="100" height="28" rx="3"/>
+  <text class="tx" x="172" y="104">WOMENS</text>
+  <rect class="bx" x="350" y="86" width="100" height="28" rx="3"/>
+  <text class="tx" x="378" y="104">MENS</text>
+  <text class="an" x="462" y="104">← a node</text>
+
+  <path class="ed" d="M 185 114 L 130 158 M 215 114 L 265 158"/>
+  <path class="ed" d="M 400 114 L 400 158"/>
+
+  <rect class="bx lf" x="80" y="158" width="100" height="28" rx="3"/>
+  <text class="tx" x="108" y="176">KNITS</text>
+  <rect class="bx" x="215" y="158" width="100" height="28" rx="3"/>
+  <text class="tx" x="243" y="176">PANTS</text>
+  <rect class="bx lf" x="350" y="158" width="100" height="28" rx="3"/>
+  <text class="tx" x="378" y="176">SHIRTS</text>
+
+  <path class="ed" d="M 250 186 L 205 230 M 280 186 L 325 230"/>
+
+  <rect class="bx lf" x="155" y="230" width="100" height="28" rx="3"/>
+  <text class="tx" x="181" y="248">ANKLES</text>
+  <rect class="bx lf" x="275" y="230" width="100" height="28" rx="3"/>
+  <text class="tx" x="303" y="248">WIDE LEG</text>
+  <text class="an" x="388" y="248">← leaves (shaded)</text>
+
+  <text class="an" x="8" y="288">an edge is a parent→child line · the path to ANKLES is APPAREL › WOMENS › PANTS › ANKLES</text>
+</svg>
+<figcaption>One tree, every term. Note that leaves can sit at different depths &mdash; KNITS is a leaf at depth 2, ANKLES at depth 3. That is allowed, and it causes trouble later (&sect;12).</figcaption>
+</figure>
+
+<dl>
+  <dt>Node</dt>
+  <dd>Any box. A single position in the tree. <code>WOMENS</code> is a node; so is <code>ANKLES</code>.</dd>
+
+  <dt>Root</dt>
+  <dd>The one node at the top with no parent. Everything is inside it.</dd>
+
+  <dt>Leaf</dt>
+  <dd>A node with no children &mdash; the bottom. In retail this is usually the individual product or SKU.</dd>
+
+  <dt>Parent / child</dt>
+  <dd>Directly above / directly below, one step. <code>WOMENS</code> is the parent of <code>PANTS</code>.</dd>
+
+  <dt>Ancestor / descendant</dt>
+  <dd>Above / below at <em>any</em> distance. <code>APPAREL</code> is an ancestor of <code>ANKLES</code>; <code>ANKLES</code> is a descendant of <code>APPAREL</code>. Parent is just "ancestor at distance 1". This distinction matters enormously when you get to storage (&sect;9).</dd>
+
+  <dt>Level</dt>
+  <dd>A named horizontal band. In our data, levels have names like <code>division_nm</code>, <code>dept_nm</code>, <code>class_nm</code>. <strong>A level is a <em>kind</em> of node, not a node.</strong> "Department" is a level; "WOMENS" is a node at that level. Beginners mix these up constantly, and our own schema is careful to say which one it means every time.</dd>
+
+  <dt>Depth</dt>
+  <dd>How many steps down from the root. Root is depth 0. Usually depth and level are the same thing &mdash; depth 1 <em>is</em> the department level &mdash; and our code relies on that ("consumers require one level per depth and one depth per level for an org").</dd>
+
+  <dt>Path</dt>
+  <dd>The full chain of nodes from the root down to a node. The path to <code>ANKLES</code> is <code>APPAREL › WOMENS › PANTS › ANKLES</code>. Remember this word &mdash; in our system the path is not just a description of a node, the path <em>is</em> the node's identity (&sect;8).</dd>
+</dl>
+
+<h2 id="rule"><span class="n">Part I &middot; 02</span>The one rule that makes it a hierarchy</h2>
+
+<p>There is exactly one structural rule, and everything else in this guide is a consequence of it:</p>
+
+<div class="note">
+  <strong>Every node has exactly one parent.</strong><br>
+  This is called being <em>strictly nested</em>. A thing is inside one bigger thing, not two.
+</div>
+
+<p>It sounds obvious. It is violated constantly by real business data, and when it is violated the consequences are not "a slightly wrong number" &mdash; they are "this question has no answer". &sect;11 is an entire case study of one such violation and what we did about it.</p>
+
+<p>Why does the rule matter so much? Because it is what makes <strong>totals add up exactly once</strong>. If <code>ANKLES</code> belonged to both <code>PANTS</code> and <code>DENIM</code>, then summing all of <code>WOMENS</code> would count those sales twice. Every rollup number in every report would be quietly inflated, and there would be no correct answer to "how much did Womenswear sell", because the question presumes each sale belongs to exactly one place in the tree.</p>
+
+<p>The rule also gives you a very useful guarantee for free: <strong>any node's descendants form a clean partition of it.</strong> The children of <code>WOMENS</code> cover all of <code>WOMENS</code>, with no gaps and no overlaps. That is what lets you drill down, and what lets a cache serve a parent by summing children (something our tile-coverage engine leans on &mdash; see the <a href="/learning/caching/#coverage">caching guide</a>).</p>
+
+<h2 id="axes"><span class="n">Part I &middot; 03</span>The three axes of a retail fact</h2>
+
+<p>Here is the step that turns "trees are nice" into "this is how the whole system is organised".</p>
+
+<p>A retail business measures things &mdash; units sold, inventory on hand, forecast demand. Every one of those measurements is about <strong>a product, at a place, during a time</strong>. And all three of those are hierarchies.</p>
+
+<figure>
+<svg viewBox="0 0 640 250" role="img" aria-label="Three hierarchy axes — product, location, time — intersecting at a single fact">
+  <style>
+    .ax { stroke: currentColor; stroke-width: 1; opacity: 0.55; fill: none; }
+    .hd { font: 600 11px ui-monospace, Menlo, monospace; fill: currentColor; }
+    .lv { font: 11px ui-monospace, Menlo, monospace; fill: currentColor; opacity: 0.8; }
+    .fact { fill: currentColor; fill-opacity: 0.1; stroke: currentColor; stroke-width: 1; }
+    .cap { font: italic 11px Georgia, serif; fill: currentColor; opacity: 0.7; }
+  </style>
+
+  <text class="hd" x="8" y="20">PRODUCT</text>
+  <text class="lv" x="8" y="42">division</text>
+  <text class="lv" x="8" y="60">department</text>
+  <text class="lv" x="8" y="78">class</text>
+  <text class="lv" x="8" y="96">subclass</text>
+  <text class="lv" x="8" y="114">product</text>
+  <text class="lv" x="8" y="132">variant (SKU)</text>
+  <path class="ax" d="M 96 36 L 96 138"/>
+  <path class="ax" d="M 92 132 L 96 140 L 100 132"/>
+
+  <text class="hd" x="232" y="20">LOCATION</text>
+  <text class="lv" x="232" y="42">network</text>
+  <text class="lv" x="232" y="60">region</text>
+  <text class="lv" x="232" y="78">warehouse / DC</text>
+  <text class="lv" x="232" y="96">store</text>
+  <path class="ax" d="M 340 36 L 340 102"/>
+  <path class="ax" d="M 336 96 L 340 104 L 344 96"/>
+
+  <text class="hd" x="452" y="20">TIME</text>
+  <text class="lv" x="452" y="42">fiscal year</text>
+  <text class="lv" x="452" y="60">quarter</text>
+  <text class="lv" x="452" y="78">month</text>
+  <text class="lv" x="452" y="96">week</text>
+  <text class="lv" x="452" y="114">day</text>
+  <path class="ax" d="M 556 36 L 556 120"/>
+  <path class="ax" d="M 552 114 L 556 122 L 560 114"/>
+
+  <rect class="fact" x="130" y="176" width="380" height="44" rx="3"/>
+  <text class="lv" x="148" y="195">42 units    ·    SKU TSH-101-BLK-M</text>
+  <text class="lv" x="148" y="211">store 0417    ·    week 2026-FW32</text>
+
+  <path class="ax" d="M 96 146 C 96 170, 140 168, 160 176" stroke-dasharray="3 3"/>
+  <path class="ax" d="M 340 110 C 340 150, 330 160, 320 176" stroke-dasharray="3 3"/>
+  <path class="ax" d="M 556 128 C 556 160, 500 168, 470 176" stroke-dasharray="3 3"/>
+
+  <text class="cap" x="130" y="240">one fact = one point on each axis. Coarser questions move all three axes up.</text>
+</svg>
+<figcaption>Facts live at the intersection. "Knitwear, North region, October" is the same fact table read at three coarser coordinates.</figcaption>
+</figure>
+
+<p>This is the mental model to keep. A question like <em>"how much Womenswear did the Midwest sell in Q3?"</em> is not a different dataset &mdash; it is the <em>same</em> facts, read at a coarser point on each of the three axes.</p>
+
+<p>And each axis has its own tree:</p>
+
+<h4>Product</h4>
+<p>Division → department → class → subclass → product → variant. The exact names and the number of levels differ per retailer &mdash; see &sect;6. Below the hierarchy sit two more levels that are not classification but identity: the <strong>product</strong> (a style, e.g. "Crew Neck Tee") and the <strong>variant</strong> or SKU (that style in a specific colour and size). In our schema those are <code>silver.product</code> and <code>silver.product_variant</code>.</p>
+
+<h4>Location</h4>
+<p>Network → region → warehouse/DC → store. Ours is modelled as a <em>supply</em> graph rather than a pure geography: an edge means "stock flows from the parent to the child". The schema says it outright &mdash; <code>parentId</code> is "the supplying side of the edge &mdash; a warehouse, DC or store-owned box" and <code>childId</code> is "the served side &mdash; the store the parent supplies".</p>
+<p>That framing has a consequence worth noticing early: <strong>one store can have several parents</strong> (served by more than one warehouse). Strictly, that makes the location structure a graph rather than a tree. Our schema accommodates it deliberately &mdash; "one store can appear as the child of several parents" &mdash; which is why location uses a storage pattern that tolerates it (&sect;9).</p>
+
+<h4>Time</h4>
+<p>Year → quarter → month → week → day. Retail does <em>not</em> use the calendar you use. It uses a <strong>fiscal calendar</strong> (often the NRF 4-5-4 pattern) where a "month" is a whole number of weeks, so week-over-week comparisons line up. Our fiscal labels are deliberately shaped so they can never be confused with Gregorian ones:</p>
+
+<pre><code>month   -&gt; YYYY-FMnn    (e.g. 2026-FM11)
+quarter -&gt; YYYY-FQn     (e.g. 2026-FQ3)
+week    -&gt; YYYY-FWnn    (e.g. 2026-FW47)
+year    -&gt; FYyyyy       (e.g. FY2026)</code></pre>
+
+<p>Gregorian remains our default; a fiscal calendar is loaded only when an org opts in. But the principle generalises: <strong>when two systems of labels mean different things, make them impossible to confuse.</strong> <code>2026-11</code> meaning "November" and <code>2026-11</code> meaning "fiscal month 11" is a bug waiting for a quiet afternoon.</p>
+
+<h2 id="grain"><span class="n">Part I &middot; 04</span>Grain &mdash; the most useful word here</h2>
+
+<p>If you take one piece of jargon from this guide, take this one.</p>
+
+<div class="note">
+  <strong>Grain</strong> (also "granularity") is the level of detail at which one row of data exists. It is the answer to: <em>"what does one row of this table represent?"</em>
+</div>
+
+<p>If one row of a table is "one SKU, in one store, in one week", then the grain is SKU × store × week. Coarse grain means few, big rows; fine grain means many, small rows.</p>
+
+<p>You will see <strong>PVL</strong> in our code &mdash; product × variant × location. That is the fine grain our physical facts sit at. The <a href="/learning/caching/">caching guide</a> puts it in one sentence: <em>"physical rows sit at pvl × date, so any rollup or drill is just a filter."</em></p>
+
+<p>Three things follow from getting grain right:</p>
+
+<ol>
+  <li><strong>You cannot invent detail you did not store.</strong> If your facts are at month grain, no query will give you a week. Going finer requires re-loading data; going coarser is just arithmetic. This asymmetry is why fact tables are usually stored at the finest grain that is affordable.</li>
+  <li><strong>Joining two tables of different grain fans out rows.</strong> Join a month-grain table to a week-grain one and each month row is duplicated across its weeks. If you then sum, you have multiplied your numbers. This is the single most common data bug there is.</li>
+  <li><strong>Every aggregation is a statement about grain.</strong> "Sum by department" means: take rows at PVL grain, and produce rows at department grain.</li>
+</ol>
+
+<h2 id="rollup"><span class="n">Part I &middot; 05</span>Rollup, drilldown, and the aggregation trap</h2>
+
+<p>Two operations, and one trap that catches everyone.</p>
+
+<p><strong>Rollup</strong> (or "roll up", "aggregate") means moving <em>up</em> the tree: combine children into their parent. Sales of every SKU in <code>KNITS</code>, combined, gives sales of <code>KNITS</code>.</p>
+
+<p><strong>Drilldown</strong> means moving <em>down</em>: from <code>KNITS</code>, show me the individual SKUs. This is only ever a filter &mdash; the detail was always there.</p>
+
+<p>Now the trap, and it is genuinely the thing most likely to make you ship a wrong number:</p>
+
+<div class="note bad">
+  <strong>Rolling up is not always summing.</strong>
+  <p>Units sold? Sum them. Revenue? Sum it. But <em>average unit retail</em>, <em>gross margin percent</em>, <em>weeks of supply</em>, <em>sell-through rate</em> &mdash; these are <strong>ratios</strong>, and the average of ratios is not the ratio of averages.</p>
+  <p>If one store sells 1 unit at 50% margin and another sells 999 at 10%, the department's margin is not 30%. It is much nearer 10%, because it is a <em>weighted</em> average &mdash; and the right weights come from the underlying quantities, not from the ratios themselves.</p>
+</div>
+
+<p>The general fix, and the one we use: <strong>each metric declares how it aggregates</strong>, and that declaration lives in exactly one place. Ours is <code>plan_metric_config</code>, and it is deliberately shared between the query engine and the pre-aggregation job, so a parent you compute on the fly and a parent someone pre-built can never disagree.</p>
+
+<p>This is also why our tile-coverage engine refuses to do the aggregation itself. From its source comment:</p>
+
+<blockquote>Letting the coverage engine sum rows would silently break ratio metrics (AOR, gross-margin %, weeks-of-supply).</blockquote>
+
+<p>The engine only decides whether data <em>can</em> be served; a separate display cascade does the actual rolling up, applying each metric's declared aggregation. Two responsibilities, kept apart on purpose.</p>
+
+<hr>
+
+<h2 id="ours"><span class="n">Part II &middot; 06</span>Ours, concretely: four real orgs</h2>
+
+<p>Now the part that will make our codebase readable. Here are four of our actual customers' product hierarchies, exactly as registered in the lakehouse:</p>
+
+<div class="tbl-wrap">
+<table>
+  <tr><th>Org</th><th>Levels, root first</th><th>Count</th></tr>
+  <tr>
+    <td><strong>TCP</strong></td>
+    <td><code>department_division_name</code> › <code>department_name</code> › <code>category_name</code> › <code>subclass_name</code></td>
+    <td>4</td>
+  </tr>
+  <tr>
+    <td><strong>At Home</strong></td>
+    <td><code>department_name</code> › <code>sub_department_name</code> › <code>class_name</code> › <code>sub_class_name</code></td>
+    <td>4</td>
+  </tr>
+  <tr>
+    <td><strong>Express</strong> <span class="tag">before Aug 2026</span></td>
+    <td><code>division_nm</code> › <code>group_desc</code> › <code>dept_nm</code> › <code>class_nm</code> › <code>subclass_nm</code></td>
+    <td>5</td>
+  </tr>
+  <tr>
+    <td><strong>Express</strong> <span class="tag">now</span></td>
+    <td><code>division_id</code> › <code>group_id</code> › <code>dept_id</code> › <code>class_id</code> › <code>ep_pwrdrvr_id</code></td>
+    <td>5</td>
+  </tr>
+</table>
+</div>
+
+<p>Stare at that table for a second, because it contains the single most important fact about hierarchies in our system:</p>
+
+<div class="note">
+  <strong>Every retailer's hierarchy is different.</strong> Different depth, different names, different meanings. "Class" for one org sits where "category" sits for another. There is no universal retail hierarchy, and any code that hardcodes one is wrong for everybody except the org it was written against.
+</div>
+
+<p>Notice too that Express's own hierarchy <em>changed</em> in August 2026 &mdash; both the field names and the leaf level. Hierarchies are not fixed. That is &sect;11.</p>
+
+<h2 id="config"><span class="n">Part II &middot; 07</span>The hierarchy is configuration, not code</h2>
+
+<p>Given the above, the only workable design is: <strong>the shape of the tree is data.</strong> Two config tables hold it, per org.</p>
+
+<h3><code>config.product_hierarchy_level</code> &mdash; which fields are levels</h3>
+
+<p>One row per level. It says only "this field is a level" &mdash; membership, nothing more. Express's five rows are literally:</p>
+
+<pre><code>INSERT INTO config.product_hierarchy_level (orgId, fieldId, ...)
+VALUES
+    (org, 'division_nm',  ...),
+    (org, 'group_desc',   ...),
+    (org, 'dept_nm',      ...),
+    (org, 'class_nm',     ...),
+    (org, 'subclass_nm',  ...)</code></pre>
+
+<p>The schema is explicit that this table carries no ordering: <em>"Membership only &mdash; it carries no depth, so level order comes from silver.product_node_relation."</em> That surprises people. Order lives elsewhere.</p>
+
+<h3><code>config.product_hierarchy_closure</code> &mdash; the order</h3>
+
+<p>Here is TCP's, in full, and it is worth reading every row because the shape teaches you the closure-table pattern you will meet again in &sect;9:</p>
+
+<pre><code>ancestorId                   descendantId                depth  isAncestorRoot
+─────────────────────────────────────────────────────────────────────────────
+department_division_name  →  department_division_name      0     true    ← self
+department_division_name  →  department_name               1     true
+department_division_name  →  category_name                 2     true
+department_division_name  →  subclass_name                 3     true
+department_name           →  department_name               0     false   ← self
+department_name           →  category_name                 1     false
+department_name           →  subclass_name                 2     false
+category_name             →  category_name                 0     false   ← self
+category_name             →  subclass_name                 1     false
+subclass_name             →  subclass_name                 0     false   ← self</code></pre>
+
+<p>Three things to take from this:</p>
+
+<ul>
+  <li><strong>Every ordered pair is stored, not just adjacent ones.</strong> There is a row for <code>department_division_name → subclass_name</code> at depth 3, three levels apart. That is what "transitive closure" means: pre-compute every ancestor-descendant relationship, not just parent-child.</li>
+  <li><strong>Every level has a self-row at depth 0.</strong> It looks redundant. It is not &mdash; it means "give me this node and everything under it" is a single query with no special case for the node itself.</li>
+  <li><strong><code>isAncestorRoot</code> marks the chain from the top.</strong> Filter to those four rows, sort by depth, and you have recovered the org's ordered level list: <code>[department_division_name, department_name, category_name, subclass_name]</code>. That is precisely what the pipeline does. The schema warns what happens if you get it wrong: <em>"Two roots present at once would yield a merged chain with duplicate depths."</em></li>
+</ul>
+
+<p>Note carefully: this closure is over <strong>level names</strong>, not over nodes. It says "department is above class". It does not say "WOMENS is above KNITS". That second kind of fact is derived per product, which is the next section.</p>
+
+<h2 id="node"><span class="n">Part II &middot; 08</span>A node <em>is</em> its path</h2>
+
+<p>Here is the design decision at the heart of our product hierarchy, and it is elegant once it clicks.</p>
+
+<p>We do not maintain a table of hierarchy nodes that products point at. Instead: <strong>a product's attributes define its path, and the path defines the node.</strong></p>
+
+<p>Concretely. A product carries attributes:</p>
+
+<pre><code>division_nm = "RETAIL"
+dept_nm     = "W PANTS"
+class_nm    = "ANKLES"</code></pre>
+
+<p>The pipeline reads the level chain from the closure config, walks it, and emits one row per depth into <code>silver.product_node_relation</code>. For this product, three rows &mdash; and the node's identity at each depth is a hash of the path so far:</p>
+
+<pre><code>nodeDepth  nodeLevel      attributes (the path)                                        nodeId
+────────────────────────────────────────────────────────────────────────────────────────────
+    1      division_nm    {"division_nm":"RETAIL"}                                     sha256(org, path)
+    2      dept_nm        {"division_nm":"RETAIL","dept_nm":"W PANTS"}                 sha256(org, path)
+    3      class_nm       {"division_nm":"RETAIL","dept_nm":"W PANTS",                 sha256(org, path)
+                           "class_nm":"ANKLES"}</code></pre>
+
+<p>Now the payoff, straight from the schema comment:</p>
+
+<blockquote>Computed by the pipeline from the path itself rather than mapped from a source column, so <strong>every product whose values trace the same path resolves to the same node.</strong></blockquote>
+
+<p>Two different products both in <code>RETAIL › W PANTS › ANKLES</code> hash to the same <code>nodeId</code>. Grouping happens for free, with no lookup table, no id assignment, no coordination. Deduplicate those rows and you get <code>silver.product_hierarchy_node</code> &mdash; the distinct nodes of the org's tree, discovered rather than declared.</p>
+
+<p>This is the same trick as content-addressing (a git commit hash, a Docker layer digest): <strong>derive identity from content, and equality becomes free.</strong> It is also exactly the trick our tile cache uses for invalidation &mdash; if you read the <a href="/learning/caching/#generation">caching guide</a>, the generation-embedded tile id is this idea applied to freshness instead of grouping.</p>
+
+<div class="note">
+  <strong>Why this matters operationally.</strong> Because identity is derived, there is nothing to migrate when the data changes. Re-run the pipeline and nodes appear, disappear, or merge on their own. The cost is the mirror image: you cannot rename a node, because the name <em>is</em> the identity. Renaming <code>W PANTS</code> to <code>WOMENS PANTS</code> does not rename a node &mdash; it creates a new one and abandons the old.
+</div>
+
+<h2 id="storage"><span class="n">Part III &middot; 09</span>How you store a tree in a database</h2>
+
+<p>Relational tables are flat. Trees are not. There are four classic patterns for bridging that, and we use three of them &mdash; different ones in different places, for good reasons. This is the most transferable section of the guide; these patterns are the same in any system you will ever work on.</p>
+
+<figure>
+<svg viewBox="0 0 640 320" role="img" aria-label="Three ways to store a tree: adjacency list, materialized path, closure table">
+  <style>
+    .pb { fill: none; stroke: currentColor; stroke-width: 1; opacity: 0.6; }
+    .ph { font: 600 11px ui-monospace, Menlo, monospace; fill: currentColor; }
+    .pt { font: 10px ui-monospace, Menlo, monospace; fill: currentColor; opacity: 0.85; }
+    .pc { font: italic 10px Georgia, serif; fill: currentColor; opacity: 0.65; }
+  </style>
+
+  <rect class="pb" x="4" y="8" width="200" height="300" rx="3"/>
+  <text class="ph" x="18" y="30">1 · ADJACENCY LIST</text>
+  <text class="pt" x="18" y="54">id    parent</text>
+  <text class="pt" x="18" y="70">────────────</text>
+  <text class="pt" x="18" y="86">WOMENS  APPAREL</text>
+  <text class="pt" x="18" y="102">PANTS   WOMENS</text>
+  <text class="pt" x="18" y="118">ANKLES  PANTS</text>
+  <text class="pc" x="18" y="148">one row per edge.</text>
+  <text class="pc" x="18" y="164">tiny, trivial to update.</text>
+  <text class="pc" x="18" y="188">but "all descendants of</text>
+  <text class="pc" x="18" y="204">APPAREL" needs a</text>
+  <text class="pc" x="18" y="220">RECURSIVE query.</text>
+  <text class="pc" x="18" y="252">ours:</text>
+  <text class="pt" x="18" y="270">location_relation</text>
+
+  <rect class="pb" x="216" y="8" width="200" height="300" rx="3"/>
+  <text class="ph" x="230" y="30">2 · MATERIALIZED PATH</text>
+  <text class="pt" x="230" y="54">node    path</text>
+  <text class="pt" x="230" y="70">──────────────────</text>
+  <text class="pt" x="230" y="86">WOMENS  /APPAREL</text>
+  <text class="pt" x="230" y="102">PANTS   /APPAREL</text>
+  <text class="pt" x="230" y="118">        /WOMENS</text>
+  <text class="pc" x="230" y="148">each row carries its</text>
+  <text class="pc" x="230" y="164">whole ancestry.</text>
+  <text class="pc" x="230" y="188">ancestor test = a prefix</text>
+  <text class="pc" x="230" y="204">match. no joins at all.</text>
+  <text class="pc" x="230" y="228">but moving a node</text>
+  <text class="pc" x="230" y="244">rewrites its subtree.</text>
+  <text class="pc" x="230" y="270">ours:</text>
+  <text class="pt" x="230" y="288">product_node_relation</text>
+
+  <rect class="pb" x="428" y="8" width="208" height="300" rx="3"/>
+  <text class="ph" x="442" y="30">3 · CLOSURE TABLE</text>
+  <text class="pt" x="442" y="54">anc      desc     depth</text>
+  <text class="pt" x="442" y="70">──────────────────────</text>
+  <text class="pt" x="442" y="86">APPAREL  APPAREL    0</text>
+  <text class="pt" x="442" y="102">APPAREL  WOMENS     1</text>
+  <text class="pt" x="442" y="118">APPAREL  PANTS      2</text>
+  <text class="pt" x="442" y="134">APPAREL  ANKLES     3</text>
+  <text class="pc" x="442" y="164">one row per ancestor–</text>
+  <text class="pc" x="442" y="180">descendant PAIR.</text>
+  <text class="pc" x="442" y="204">subtree query = a flat</text>
+  <text class="pc" x="442" y="220">WHERE. no recursion,</text>
+  <text class="pc" x="442" y="236">no prefix matching.</text>
+  <text class="pc" x="442" y="252">costs O(n·depth) rows.</text>
+  <text class="pc" x="442" y="276">ours:</text>
+  <text class="pt" x="442" y="294">location_closure</text>
+</svg>
+<figcaption>The same three-node tree in three shapes. Each trades write cost against read cost differently; none is universally right.</figcaption>
+</figure>
+
+<h3>Pattern 1 &mdash; Adjacency list</h3>
+<p>Store one row per edge: <code>(parent, child)</code>. This is our <code>silver.location_relation</code>: <em>"One depth-1 supply edge in the location hierarchy: stock flows from the parent &mdash; a supplying warehouse, DC or store-owned box &mdash; to the child store it serves."</em></p>
+<p><strong>Good:</strong> smallest possible representation, and changing the tree is a one-row update. <strong>Bad:</strong> "everything under X" requires a recursive query, whose cost grows with depth and which many query engines handle badly.</p>
+
+<h3>Pattern 2 &mdash; Materialized path</h3>
+<p>Store each node's full ancestry on the node itself. This is our product hierarchy: the <code>attributes</code> JSON on <code>product_node_relation</code> <em>is</em> the path.</p>
+<p><strong>Good:</strong> "is X under Y?" is a prefix test with no joins, and &mdash; as &sect;8 showed &mdash; hashing the path gives you free node identity. <strong>Bad:</strong> moving a node means rewriting every descendant's path. We accept that cost because our pipeline rebuilds the whole org slice anyway (<em>"rebuilt per org via replaceWhere"</em>), so a "rewrite everything" cost is a cost we were already paying.</p>
+
+<h3>Pattern 3 &mdash; Closure table</h3>
+<p>Store one row for every ancestor-descendant pair, with the distance. This is <code>silver.location_closure</code>, and its own description explains exactly why it exists: <em>"materialised so a subtree query needs no recursion and carrying a self row at depth 0 for every node."</em></p>
+<p><strong>Good:</strong> every hierarchy question becomes a flat <code>WHERE</code>. It also tolerates a node having several parents, which is why location &mdash; where a store really can be served by two warehouses &mdash; uses it. <strong>Bad:</strong> the row count is roughly nodes × average depth, and every structural change means recomputing a subgraph. Ours caps the expansion: <em>"the expansion stops after ten levels, so a longer path is not materialised."</em></p>
+
+<h3>Pattern 4 &mdash; Nested sets</h3>
+<p>Number the nodes by a depth-first walk so each node holds a <code>(left, right)</code> interval and containment becomes a numeric range test. Elegant, very fast to read, and <em>brutal</em> to update &mdash; one insert renumbers half the tree. We do not use it. You should know the name so you recognise it in the wild.</p>
+
+<div class="note">
+  <strong>How to choose, in one line each.</strong> Reads are rare and the tree changes constantly → adjacency list. Reads dominate and identity-by-content is valuable → materialized path. Subtree queries are the hot path, or a node can have multiple parents → closure table. You are reading a 2005 blog post → nested sets.
+</div>
+
+<p>And note our system uses a closure table <em>twice, at different altitudes</em>: <code>config.product_hierarchy_closure</code> is a closure over <strong>level names</strong> (four levels, ten rows), while <code>silver.location_closure</code> is a closure over <strong>actual nodes</strong> (thousands of locations). Same pattern, completely different scale. Recognising that they are the same shape is a good test of whether &sect;9 landed.</p>
+
+<h2 id="prebuilt"><span class="n">Part III &middot; 10</span>Pre-aggregation: eight levels of one fact</h2>
+
+<p>Rolling up is arithmetic, and arithmetic over billions of rows is slow. So the standard move is to <strong>pre-compute the rollups</strong> and store them alongside the detail.</p>
+
+<p>Our <code>gold.stock</code> table does this. One column, <code>level</code>, says what altitude each row is at:</p>
+
+<div class="tbl-wrap">
+<table>
+  <tr><th><code>level</code></th><th>Populated dimensions</th><th>Think of it as</th></tr>
+  <tr><td><code>product_variant_location</code></td><td>productId + variantId + locationId</td><td>the finest grain &mdash; PVL</td></tr>
+  <tr><td><code>product_variant</code></td><td>productId + variantId</td><td>this SKU, all stores</td></tr>
+  <tr><td><code>product_location</code></td><td>productId + locationId</td><td>this style, one store</td></tr>
+  <tr><td><code>product</code></td><td>productId</td><td>this style, everywhere</td></tr>
+  <tr><td><code>location</code></td><td>locationId</td><td>this store, everything</td></tr>
+  <tr><td><code>product_hierarchy</code></td><td>hierarchyId</td><td>a hierarchy node, all stores</td></tr>
+  <tr><td><code>product_hierarchy_location</code></td><td>hierarchyId + locationId</td><td>a node, one store</td></tr>
+  <tr><td><code>overall</code></td><td>&mdash;</td><td>the whole business</td></tr>
+</table>
+</div>
+
+<p>Two details worth internalising:</p>
+
+<p><strong>Unused dimensions are NULL, not absent.</strong> <em>"Dimensions the level does not name are NULL."</em> A <code>product</code>-level row has <code>locationId = NULL</code> &mdash; meaning "all locations", not "unknown location". Every query against this table must filter on <code>level</code> first, or it will sum the detail rows <em>and</em> their pre-aggregated parents together and double-count spectacularly. This is the classic hazard of mixed-grain tables.</p>
+
+<p><strong><code>hierarchyId</code> is the bridge.</strong> It is <em>"a reference to a product-hierarchy node &mdash; <code>product_hierarchy_node.id</code>, resolved through <code>silver.product_node_relation.nodeId</code>"</em>, and it is non-NULL only at the two hierarchy levels. That single column is what connects the fact table to the tree built in &sect;8.</p>
+
+<p>This also connects directly to caching. Our tile-coverage engine treats a tile as <code>(node, bucket)</code> &mdash; a hierarchy node crossed with a time bucket &mdash; which is exactly a <code>product_hierarchy</code>-level row for one period. The reason a cached department can satisfy a request for one of its classes is the &sect;2 partition guarantee, and nothing else.</p>
+
+<hr>
+
+<h2 id="express"><span class="n">Part IV &middot; 11</span>Case study: when the tree isn't a tree</h2>
+
+<p>Everything above assumes the rule from &sect;2 holds. Here is what happens when the business says otherwise. This is a real change we shipped in August 2026, and it is the best single illustration in our codebase of why that rule is not academic.</p>
+
+<h3>The situation</h3>
+
+<p>Express plans at a level called <strong>Power Driver</strong> &mdash; a style-level attribute from their merchandising system (<code>ep_pwrdrvr_id</code>). It is what their planners actually think in and what they reconcile their financial plan against. But our registered hierarchy for them ended at <code>subclass_nm</code>. Power Driver was not in the tree at all.</p>
+
+<p>The obvious fix is "add Power Driver as a sixth level below subclass". That does not work, and the reason is the whole lesson:</p>
+
+<figure>
+<svg viewBox="0 0 640 220" role="img" aria-label="A power driver spanning two subclasses, violating strict nesting">
+  <style>
+    .n2 { fill: none; stroke: currentColor; stroke-width: 1; }
+    .n2.bad { stroke-dasharray: 4 3; }
+    .e2 { stroke: currentColor; stroke-width: 1; opacity: 0.45; fill: none; }
+    .e2.bad { stroke-width: 1.4; opacity: 0.95; }
+    .t2 { font: 11px ui-monospace, Menlo, monospace; fill: currentColor; }
+    .c2 { font: italic 11px Georgia, serif; fill: currentColor; opacity: 0.7; }
+    .w2 { font: 600 11px ui-monospace, Menlo, monospace; fill: currentColor; }
+  </style>
+
+  <rect class="n2" x="250" y="12" width="130" height="26" rx="3"/>
+  <text class="t2" x="280" y="30">class 785</text>
+
+  <path class="e2" d="M 290 38 L 200 78 M 340 38 L 430 78"/>
+
+  <rect class="n2" x="120" y="78" width="150" height="26" rx="3"/>
+  <text class="t2" x="140" y="96">subclass A</text>
+  <rect class="n2" x="360" y="78" width="150" height="26" rx="3"/>
+  <text class="t2" x="380" y="96">subclass B</text>
+
+  <path class="e2 bad" d="M 195 104 L 290 150"/>
+  <path class="e2 bad" d="M 435 104 L 350 150"/>
+
+  <rect class="n2 bad" x="245" y="150" width="150" height="28" rx="3"/>
+  <text class="w2" x="258" y="168">POWER DRIVER</text>
+
+  <text class="c2" x="14" y="140">two parents</text>
+  <text class="c2" x="14" y="158">⇒ not a tree</text>
+  <text class="c2" x="14" y="176">⇒ totals would</text>
+  <text class="c2" x="14" y="194">double-count</text>
+
+  <text class="c2" x="430" y="168">343 of 505 power drivers</text>
+  <text class="c2" x="430" y="186">looked like this</text>
+  <text class="c2" x="430" y="204">(prod, 2026-08-03)</text>
+</svg>
+<figcaption>The measurement that settled it. A Power Driver routinely spans several (class, subclass) pairs — so it cannot sit below subclass in a strictly nested chain.</figcaption>
+</figure>
+
+<p>From the migration, verbatim:</p>
+
+<blockquote>Subclass is NOT their planning level and structurally CANNOT share a chain with power driver: 343 of 505 power drivers span multiple (class, subclass) pairs (prod, 2026-08-03), and a closure chain must be strictly nested.</blockquote>
+
+<p>Two-thirds of Power Drivers had more than one parent. There is no arrangement of those two levels in one chain that is a tree.</p>
+
+<h3>The resolution</h3>
+
+<p>Since Power Driver <em>is</em> strictly nested inside <strong>class</strong> (just not inside subclass), the fix was to drop subclass out of the chain and make Power Driver the leaf:</p>
+
+<pre><code>division_nm &gt; group_desc &gt; dept_nm &gt; class_nm &gt; subclass_nm      (before)
+division_id &gt; group_id   &gt; dept_id &gt; class_id &gt; ep_pwrdrvr_id    (after)</code></pre>
+
+<p>Subclass did not disappear from the data &mdash; it stayed on the product as a display and filter attribute. It simply stopped being a <em>level</em>. That distinction is the one from &sect;1: a field can describe a product without being a rung on the ladder.</p>
+
+<h3>The second lesson: ids, not names</h3>
+
+<p>Notice the whole chain also switched from <code>_nm</code> (name) to <code>_id</code>. The migration measured why, and the numbers are a lesson in themselves:</p>
+
+<div class="tbl-wrap">
+<table>
+  <tr><th>Level pair</th><th>child&nbsp;id → &gt;1 parent&nbsp;id</th><th>Ids vs names</th></tr>
+  <tr><td>division › group</td><td>0</td><td>109 ids collapse to 48 names</td></tr>
+  <tr><td>group › dept</td><td>0</td><td>131 ids → 60 names</td></tr>
+  <tr><td>dept › class</td><td>0</td><td>529 ids → 212 names</td></tr>
+  <tr><td>class › power driver</td><td>2</td><td>505 ids → 319 descriptions</td></tr>
+</table>
+</div>
+
+<blockquote>Ids form a clean tree at every level; names collide org-wide at every level below division (the RETAIL/EFO "twin" pattern) and drift on 8 power drivers, so every name is label-only.</blockquote>
+
+<p>Express has two parallel business units whose departments share display names &mdash; "M KNITS" exists as both id 22 and id 222. Key the hierarchy on names and those two merge into one node, silently pooling unrelated inventory. The fix is a rule you should apply everywhere:</p>
+
+<div class="note">
+  <strong>Build structure on ids. Show names.</strong> A display label is for humans and may be duplicated, renamed or mistyped. Structural identity must come from something the source system guarantees is unique. In our schema the node path carries the id chain, and display labels are hydrated separately from <code>product.attributes</code> &mdash; they are <em>"deliberately NOT chain levels"</em>.
+</div>
+
+<h3>The third lesson: what happens to the leftovers</h3>
+
+<p>The node builder drops any product whose <em>leaf</em> value is null. So the moment Power Driver became the leaf, every untagged product would have vanished from the hierarchy &mdash; about 41% of them. The migration therefore shipped <strong>paired</strong> with a change guaranteeing an <code>UNTAGGED</code> fallback value.</p>
+
+<p>That is a general rule about changing a hierarchy: <strong>moving the leaf changes who is in the tree at all.</strong> Ask "what is now missing a value at the new leaf?" before you ask anything else.</p>
+
+<h2 id="traps"><span class="n">Part IV &middot; 12</span>Nine more ways hierarchies bite</h2>
+
+<h3>1. Ragged hierarchies (a missing middle)</h3>
+<p>What if a product has a division and a class but no department? Our pipeline drops the null from the path: <em>"Fields whose value is NULL for the product are dropped, so an intermediate gap shortens the map without changing depth."</em></p>
+<p>Read that twice. The path gets <em>shorter</em> but the depth stays the same. So a node at depth 3 may have a path of only two entries, and comparing "number of path entries" against "depth" will disagree. Both behaviours are deliberate; code that assumes <code>len(path) == depth + 1</code> is wrong.</p>
+
+<h3>2. Unbalanced leaves</h3>
+<p>Real trees are not even. One department may be classified three levels deep, another five. A query that says "give me level 4" silently returns nothing for the shallow branch &mdash; not an error, just missing rows. Prefer "give me the leaves" over "give me depth N" when the tree may be unbalanced.</p>
+
+<h3>3. Double-counting from mixed grain</h3>
+<p>The &sect;10 hazard. A table holding both detail rows and pre-aggregated rows will double-count unless every query filters on the level column. The same bug appears when joining tables of different grain (&sect;4).</p>
+
+<h3>4. Ratio metrics rolled up by summing</h3>
+<p>The &sect;5 trap. It never looks wrong &mdash; the number is plausible, just incorrect. The only defence is a single declared aggregation per metric, used by every path.</p>
+
+<h3>5. The hierarchy moved under a saved plan</h3>
+<p>Someone re-classes a style; the tree changes; a plan saved against the old structure now references a node that no longer exists, or whose membership has changed. Since our node ids are path hashes (&sect;8), re-parenting does not mutate a node &mdash; it produces a <em>different</em> node, and the old one simply stops having members. Which is safe, and also means "my plan went empty" is a re-classification symptom.</p>
+
+<h3>6. Depth limits</h3>
+<p>Closure expansion is not free, so ours caps it: the location closure <em>"stops after ten levels"</em>. A path longer than the cap is not materialised and therefore not found &mdash; a silent absence rather than an error. Know your cap.</p>
+
+<h3>7. Asking for a level that is not a level</h3>
+<p>Grouping by an attribute that is not in the chain gives you an answer that looks fine and means nothing, because the groups are not a partition &mdash; a product can land in two of them. Before grouping by something, check it is a registered level.</p>
+
+<h3>8. Levels registered but unordered</h3>
+<p>Remember that <code>product_hierarchy_level</code> carries membership only. Register a level there and forget the closure row and you have a field the system believes is a level but cannot place. The order lives in exactly one table; keep them in step.</p>
+
+<h3>9. Two roots</h3>
+<p>The closure's <code>isAncestorRoot</code> rows are how the level chain is recovered. Ship two roots and you get <em>"a merged chain with duplicate depths"</em> &mdash; two levels claiming the same rung, and downstream consumers that assume one-level-per-depth quietly picking whichever they see first.</p>
+
+<h2 id="notatree"><span class="n">Part IV &middot; 13</span>Things that look like hierarchies and aren't</h2>
+
+<p>Not every grouping is a tree, and treating a non-tree as a tree is how you get the &sect;11 situation. Three kinds we run, none of which is a hierarchy:</p>
+
+<h3>Clusters &mdash; many-to-many groupings</h3>
+<p><code>silver.location_cluster</code> holds <em>"named, many-to-many groupings of locations used for aggregation and filtering"</em>. A store can belong to several clusters at once &mdash; "high volume", "cold climate", "mall". These overlap by design, so <strong>you cannot sum across clusters</strong> without double-counting, and there is no "parent cluster". They are tags, not a tree. Useful for filtering and comparison; never for a total.</p>
+
+<h3>Product groups &mdash; connected components</h3>
+<p><code>silver.product_group_member</code> collapses products that a retailer has declared to be "the same" (a replacement style, a re-numbered SKU) into one synthetic group. That is computed by <em>connected-components label propagation</em> over a graph of SAME edges &mdash; a graph algorithm, not a tree walk. The pattern for reading it is worth remembering because it is unusual: a product with no SAME edge is <em>absent</em> rather than present with a null group, so consumers resolve identity with <code>coalesce(groupId, productId)</code> &mdash; fall back to the product itself.</p>
+
+<h3>The sibling mesh &mdash; a flat graph in a hierarchy table</h3>
+<p>The nicest trap in our schema. <code>silver.location_closure</code> holds two completely independent edge sets distinguished by a <code>type</code> column. <code>HIERARCHY</code> rows are the real tree closure, where <code>depth</code> means distance. <code>SIBLING</code> rows are a flat store-to-store transfer-eligibility mesh where <em>"depth is always 1 &mdash; the mesh is flat and the value carries no hierarchy meaning there."</em></p>
+<p>Same table, same column names, different meaning. Read a <code>SIBLING</code> row as if it were hierarchy and you will conclude that two peer stores are parent and child. <strong>Always filter on <code>type</code>.</strong></p>
+
+<hr>
+
+<h2 id="glossary"><span class="n">Part V &middot; 14</span>Glossary and checklist</h2>
+
+<h3>The words, in one place</h3>
+
+<div class="tbl-wrap">
+<table>
+  <tr><th>Term</th><th>Means</th></tr>
+  <tr><td>Node</td><td>One position in the tree</td></tr>
+  <tr><td>Level</td><td>A named band of the tree (a <em>kind</em> of node) &mdash; <code>class_nm</code></td></tr>
+  <tr><td>Depth</td><td>Steps from the root; root is 0</td></tr>
+  <tr><td>Leaf</td><td>A node with no children</td></tr>
+  <tr><td>Path</td><td>Root-to-node chain; in our product hierarchy, the node's identity</td></tr>
+  <tr><td>Ancestor / descendant</td><td>Above / below at any distance (parent = ancestor at distance 1)</td></tr>
+  <tr><td>Grain</td><td>What one row represents</td></tr>
+  <tr><td>PVL</td><td>Product × variant × location &mdash; our fine fact grain</td></tr>
+  <tr><td>SKU / variant</td><td>A product in a specific colour and size</td></tr>
+  <tr><td>Rollup</td><td>Combine children into a parent</td></tr>
+  <tr><td>Drilldown</td><td>Expand a parent into children (a filter)</td></tr>
+  <tr><td>Closure table</td><td>Every ancestor-descendant pair, pre-computed</td></tr>
+  <tr><td>Materialized path</td><td>Each node stores its own full ancestry</td></tr>
+  <tr><td>Adjacency list</td><td>One row per parent-child edge</td></tr>
+  <tr><td>Strictly nested</td><td>Every node has exactly one parent &mdash; the rule</td></tr>
+  <tr><td>Ragged</td><td>A hierarchy with missing intermediate values</td></tr>
+  <tr><td>Fiscal calendar</td><td>Retail time hierarchy where months are whole weeks (often 4-5-4)</td></tr>
+</table>
+</div>
+
+<h3>Where to look in our code</h3>
+
+<div class="tbl-wrap">
+<table>
+  <tr><th>Question</th><th>Table</th></tr>
+  <tr><td>Which fields are levels for this org?</td><td><code>config.product_hierarchy_level</code></td></tr>
+  <tr><td>What order are the levels in?</td><td><code>config.product_hierarchy_closure</code> (filter <code>isAncestorRoot</code>)</td></tr>
+  <tr><td>Which node is this product in, at each depth?</td><td><code>silver.product_node_relation</code></td></tr>
+  <tr><td>What are the distinct nodes?</td><td><code>silver.product_hierarchy_node</code></td></tr>
+  <tr><td>Which warehouse supplies this store?</td><td><code>silver.location_relation</code></td></tr>
+  <tr><td>All stores under this warehouse?</td><td><code>silver.location_closure</code> (<code>type = 'HIERARCHY'</code>)</td></tr>
+  <tr><td>Which stores can transfer to each other?</td><td><code>silver.location_closure</code> (<code>type = 'SIBLING'</code>)</td></tr>
+  <tr><td>Facts at a node?</td><td><code>gold.stock</code> where <code>level = 'product_hierarchy'</code></td></tr>
+  <tr><td>How does this metric aggregate?</td><td><code>plan_metric_config</code></td></tr>
+</table>
+</div>
+
+<h3>The checklist</h3>
+
+<h4>Before you group by something</h4>
+<ul>
+  <li>Is it a registered level for <em>this org</em>, or just an attribute?</li>
+  <li>Is it strictly nested inside its parent &mdash; does each value have exactly one parent value? (Measure it. Express's answer was 343 out of 505.)</li>
+  <li>Are you grouping on an id or a display name? If a name, could two different things share it?</li>
+</ul>
+
+<h4>Before you aggregate</h4>
+<ul>
+  <li>What grain are the rows at, and what grain do you want?</li>
+  <li>Is this metric a sum or a ratio? If a ratio, what are the weights?</li>
+  <li>Does the table mix grains (a <code>level</code> column)? Have you filtered it?</li>
+  <li>Could your join fan rows out?</li>
+</ul>
+
+<h4>Before you change a hierarchy</h4>
+<ul>
+  <li>Who is missing a value at the new leaf &mdash; and will they be dropped?</li>
+  <li>Are both config tables updated consistently, levels and closure?</li>
+  <li>Exactly one root?</li>
+  <li>What happens to plans and reports saved against the old node ids?</li>
+</ul>
+
+<h4>Before you trust a hierarchy query</h4>
+<ul>
+  <li>Does the total at the parent equal the sum of the children? If not, you have overlap, a gap, or a ratio.</li>
+  <li>Are you inside the depth cap?</li>
+  <li>If you are reading <code>location_closure</code>, did you filter on <code>type</code>?</li>
+</ul>
+
+<p>That first one is the single best test there is. <strong>Roll up, then compare to the parent.</strong> If a hierarchy is well formed and your aggregation is right, those agree exactly. If they do not, something in this guide explains why &mdash; and it is usually &sect;2.</p>
+
+<hr>
+
+<p class="foot">Written from the <code>retail-agents-backend</code> schema and migrations as of 2026-09-14. Org hierarchies change &mdash; the four in &sect;6 were current at the time of writing, and Express's own chain changed in August 2026, which is rather the point. Pairs with <a href="/learning/caching/">Caches, from first principles to ours</a>, whose tile-coverage section assumes the vocabulary built here. <a href="/learning/">&larr; /learning/</a></p>
+
+</body>
+</html>
