@@ -1,0 +1,833 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Test sprawl — where the frontend's 726 test files come from</title>
+    <meta name="description" content="An architecture review of the Intelo frontend's test estate: why tests multiply around wide interfaces, eight deepening candidates, and a test layout convention.">
+    <style>
+      body { font-feature-settings: "ss01", "tnum"; }
+      .seam { stroke-dasharray: 4 4; }
+      .leak { stroke: #dc2626; }
+      .deep { background: linear-gradient(135deg, #0f172a, #1e293b); }
+      .schem { font: 600 10px/1.2 ui-sans-serif, system-ui; letter-spacing: .06em; text-transform: uppercase; }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+      .chip-t { display:inline-flex; align-items:center; justify-content:center; width:14px; height:14px; border-radius:3px; background:#d1fae5; color:#065f46; font:700 9px/1 ui-sans-serif; }
+      .diagram { min-height: 320px; }
+      details > summary { cursor: pointer; }
+      .mermaid svg { max-width: 100%; height: auto; }
+    </style>
+  <style>*, ::before, ::after{--tw-border-spacing-x:0;--tw-border-spacing-y:0;--tw-translate-x:0;--tw-translate-y:0;--tw-rotate:0;--tw-skew-x:0;--tw-skew-y:0;--tw-scale-x:1;--tw-scale-y:1;--tw-pan-x: ;--tw-pan-y: ;--tw-pinch-zoom: ;--tw-scroll-snap-strictness:proximity;--tw-gradient-from-position: ;--tw-gradient-via-position: ;--tw-gradient-to-position: ;--tw-ordinal: ;--tw-slashed-zero: ;--tw-numeric-figure: ;--tw-numeric-spacing: ;--tw-numeric-fraction: ;--tw-ring-inset: ;--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-color:rgb(59 130 246 / 0.5);--tw-ring-offset-shadow:0 0 #0000;--tw-ring-shadow:0 0 #0000;--tw-shadow:0 0 #0000;--tw-shadow-colored:0 0 #0000;--tw-blur: ;--tw-brightness: ;--tw-contrast: ;--tw-grayscale: ;--tw-hue-rotate: ;--tw-invert: ;--tw-saturate: ;--tw-sepia: ;--tw-drop-shadow: ;--tw-backdrop-blur: ;--tw-backdrop-brightness: ;--tw-backdrop-contrast: ;--tw-backdrop-grayscale: ;--tw-backdrop-hue-rotate: ;--tw-backdrop-invert: ;--tw-backdrop-opacity: ;--tw-backdrop-saturate: ;--tw-backdrop-sepia: ;--tw-contain-size: ;--tw-contain-layout: ;--tw-contain-paint: ;--tw-contain-style: }::backdrop{--tw-border-spacing-x:0;--tw-border-spacing-y:0;--tw-translate-x:0;--tw-translate-y:0;--tw-rotate:0;--tw-skew-x:0;--tw-skew-y:0;--tw-scale-x:1;--tw-scale-y:1;--tw-pan-x: ;--tw-pan-y: ;--tw-pinch-zoom: ;--tw-scroll-snap-strictness:proximity;--tw-gradient-from-position: ;--tw-gradient-via-position: ;--tw-gradient-to-position: ;--tw-ordinal: ;--tw-slashed-zero: ;--tw-numeric-figure: ;--tw-numeric-spacing: ;--tw-numeric-fraction: ;--tw-ring-inset: ;--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-color:rgb(59 130 246 / 0.5);--tw-ring-offset-shadow:0 0 #0000;--tw-ring-shadow:0 0 #0000;--tw-shadow:0 0 #0000;--tw-shadow-colored:0 0 #0000;--tw-blur: ;--tw-brightness: ;--tw-contrast: ;--tw-grayscale: ;--tw-hue-rotate: ;--tw-invert: ;--tw-saturate: ;--tw-sepia: ;--tw-drop-shadow: ;--tw-backdrop-blur: ;--tw-backdrop-brightness: ;--tw-backdrop-contrast: ;--tw-backdrop-grayscale: ;--tw-backdrop-hue-rotate: ;--tw-backdrop-invert: ;--tw-backdrop-opacity: ;--tw-backdrop-saturate: ;--tw-backdrop-sepia: ;--tw-contain-size: ;--tw-contain-layout: ;--tw-contain-paint: ;--tw-contain-style: }/* ! tailwindcss v3.4.16 | MIT License | https://tailwindcss.com */*,::after,::before{box-sizing:border-box;border-width:0;border-style:solid;border-color:#e5e7eb}::after,::before{--tw-content:''}:host,html{line-height:1.5;-webkit-text-size-adjust:100%;-moz-tab-size:4;tab-size:4;font-family:ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";font-feature-settings:normal;font-variation-settings:normal;-webkit-tap-highlight-color:transparent}body{margin:0;line-height:inherit}hr{height:0;color:inherit;border-top-width:1px}abbr:where([title]){-webkit-text-decoration:underline dotted;text-decoration:underline dotted}h1,h2,h3,h4,h5,h6{font-size:inherit;font-weight:inherit}a{color:inherit;text-decoration:inherit}b,strong{font-weight:bolder}code,kbd,pre,samp{font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;font-feature-settings:normal;font-variation-settings:normal;font-size:1em}small{font-size:80%}sub,sup{font-size:75%;line-height:0;position:relative;vertical-align:baseline}sub{bottom:-.25em}sup{top:-.5em}table{text-indent:0;border-color:inherit;border-collapse:collapse}button,input,optgroup,select,textarea{font-family:inherit;font-feature-settings:inherit;font-variation-settings:inherit;font-size:100%;font-weight:inherit;line-height:inherit;letter-spacing:inherit;color:inherit;margin:0;padding:0}button,select{text-transform:none}button,input:where([type=button]),input:where([type=reset]),input:where([type=submit]){-webkit-appearance:button;background-color:transparent;background-image:none}:-moz-focusring{outline:auto}:-moz-ui-invalid{box-shadow:none}progress{vertical-align:baseline}::-webkit-inner-spin-button,::-webkit-outer-spin-button{height:auto}[type=search]{-webkit-appearance:textfield;outline-offset:-2px}::-webkit-search-decoration{-webkit-appearance:none}::-webkit-file-upload-button{-webkit-appearance:button;font:inherit}summary{display:list-item}blockquote,dd,dl,figure,h1,h2,h3,h4,h5,h6,hr,p,pre{margin:0}fieldset{margin:0;padding:0}legend{padding:0}menu,ol,ul{list-style:none;margin:0;padding:0}dialog{padding:0}textarea{resize:vertical}input::placeholder,textarea::placeholder{opacity:1;color:#9ca3af}[role=button],button{cursor:pointer}:disabled{cursor:default}audio,canvas,embed,iframe,img,object,svg,video{display:block;vertical-align:middle}img,video{max-width:100%;height:auto}[hidden]:where(:not([hidden=until-found])){display:none}.relative{position:relative}.mx-auto{margin-left:auto;margin-right:auto}.mb-2{margin-bottom:0.5rem}.ml-1{margin-left:0.25rem}.mt-1{margin-top:0.25rem}.mt-2{margin-top:0.5rem}.inline-block{display:inline-block}.flex{display:flex}.grid{display:grid}.h-10{height:2.5rem}.h-12{height:3rem}.h-14{height:3.5rem}.h-16{height:4rem}.h-20{height:5rem}.h-24{height:6rem}.h-32{height:8rem}.h-4{height:1rem}.h-52{height:13rem}.h-6{height:1.5rem}.w-40{width:10rem}.w-6{width:1.5rem}.w-full{width:100%}.max-w-3xl{max-width:48rem}.max-w-6xl{max-width:72rem}.list-disc{list-style-type:disc}.grid-cols-2{grid-template-columns:repeat(2, minmax(0, 1fr))}.grid-cols-3{grid-template-columns:repeat(3, minmax(0, 1fr))}.flex-col{flex-direction:column}.flex-wrap{flex-wrap:wrap}.items-center{align-items:center}.items-baseline{align-items:baseline}.justify-center{justify-content:center}.justify-between{justify-content:space-between}.gap-1\.5{gap:0.375rem}.gap-2{gap:0.5rem}.gap-3{gap:0.75rem}.gap-5{gap:1.25rem}.gap-6{gap:1.5rem}.gap-8{gap:2rem}.gap-px{gap:1px}.gap-x-4{column-gap:1rem}.gap-y-2{row-gap:0.5rem}.space-y-0\.5 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(0.125rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(0.125rem * var(--tw-space-y-reverse))}.space-y-1 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(0.25rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(0.25rem * var(--tw-space-y-reverse))}.space-y-1\.5 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(0.375rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(0.375rem * var(--tw-space-y-reverse))}.space-y-12 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(3rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(3rem * var(--tw-space-y-reverse))}.space-y-14 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(3.5rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(3.5rem * var(--tw-space-y-reverse))}.space-y-2 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(0.5rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(0.5rem * var(--tw-space-y-reverse))}.space-y-3 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(0.75rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(0.75rem * var(--tw-space-y-reverse))}.space-y-4 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(1rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(1rem * var(--tw-space-y-reverse))}.space-y-5 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(1.25rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(1.25rem * var(--tw-space-y-reverse))}.space-y-6 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(1.5rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(1.5rem * var(--tw-space-y-reverse))}.space-y-8 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(2rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(2rem * var(--tw-space-y-reverse))}.overflow-hidden{overflow:hidden}.truncate{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.rounded{border-radius:0.25rem}.rounded-2xl{border-radius:1rem}.rounded-full{border-radius:9999px}.rounded-lg{border-radius:0.5rem}.rounded-sm{border-radius:0.125rem}.rounded-xl{border-radius:0.75rem}.border{border-width:1px}.border-2{border-width:2px}.border-\[3px\]{border-width:3px}.border-l-4{border-left-width:4px}.border-dashed{border-style:dashed}.border-emerald-300{--tw-border-opacity:1;border-color:rgb(110 231 183 / var(--tw-border-opacity, 1))}.border-emerald-600{--tw-border-opacity:1;border-color:rgb(5 150 105 / var(--tw-border-opacity, 1))}.border-red-200{--tw-border-opacity:1;border-color:rgb(254 202 202 / var(--tw-border-opacity, 1))}.border-red-300{--tw-border-opacity:1;border-color:rgb(252 165 165 / var(--tw-border-opacity, 1))}.border-red-400{--tw-border-opacity:1;border-color:rgb(248 113 113 / var(--tw-border-opacity, 1))}.border-red-500{--tw-border-opacity:1;border-color:rgb(239 68 68 / var(--tw-border-opacity, 1))}.border-red-600{--tw-border-opacity:1;border-color:rgb(220 38 38 / var(--tw-border-opacity, 1))}.border-slate-300{--tw-border-opacity:1;border-color:rgb(203 213 225 / var(--tw-border-opacity, 1))}.border-slate-400{--tw-border-opacity:1;border-color:rgb(148 163 184 / var(--tw-border-opacity, 1))}.border-slate-700{--tw-border-opacity:1;border-color:rgb(51 65 85 / var(--tw-border-opacity, 1))}.border-slate-800{--tw-border-opacity:1;border-color:rgb(30 41 59 / var(--tw-border-opacity, 1))}.border-slate-900{--tw-border-opacity:1;border-color:rgb(15 23 42 / var(--tw-border-opacity, 1))}.border-stone-200{--tw-border-opacity:1;border-color:rgb(231 229 228 / var(--tw-border-opacity, 1))}.border-stone-300{--tw-border-opacity:1;border-color:rgb(214 211 209 / var(--tw-border-opacity, 1))}.bg-amber-100{--tw-bg-opacity:1;background-color:rgb(254 243 199 / var(--tw-bg-opacity, 1))}.bg-amber-500{--tw-bg-opacity:1;background-color:rgb(245 158 11 / var(--tw-bg-opacity, 1))}.bg-emerald-100{--tw-bg-opacity:1;background-color:rgb(209 250 229 / var(--tw-bg-opacity, 1))}.bg-emerald-50{--tw-bg-opacity:1;background-color:rgb(236 253 245 / var(--tw-bg-opacity, 1))}.bg-emerald-700{--tw-bg-opacity:1;background-color:rgb(4 120 87 / var(--tw-bg-opacity, 1))}.bg-red-50{--tw-bg-opacity:1;background-color:rgb(254 242 242 / var(--tw-bg-opacity, 1))}.bg-red-600{--tw-bg-opacity:1;background-color:rgb(220 38 38 / var(--tw-bg-opacity, 1))}.bg-sky-100{--tw-bg-opacity:1;background-color:rgb(224 242 254 / var(--tw-bg-opacity, 1))}.bg-slate-100{--tw-bg-opacity:1;background-color:rgb(241 245 249 / var(--tw-bg-opacity, 1))}.bg-slate-200{--tw-bg-opacity:1;background-color:rgb(226 232 240 / var(--tw-bg-opacity, 1))}.bg-slate-300{--tw-bg-opacity:1;background-color:rgb(203 213 225 / var(--tw-bg-opacity, 1))}.bg-slate-400{--tw-bg-opacity:1;background-color:rgb(148 163 184 / var(--tw-bg-opacity, 1))}.bg-slate-50{--tw-bg-opacity:1;background-color:rgb(248 250 252 / var(--tw-bg-opacity, 1))}.bg-slate-500{--tw-bg-opacity:1;background-color:rgb(100 116 139 / var(--tw-bg-opacity, 1))}.bg-slate-800{--tw-bg-opacity:1;background-color:rgb(30 41 59 / var(--tw-bg-opacity, 1))}.bg-slate-900{--tw-bg-opacity:1;background-color:rgb(15 23 42 / var(--tw-bg-opacity, 1))}.bg-stone-100{--tw-bg-opacity:1;background-color:rgb(245 245 244 / var(--tw-bg-opacity, 1))}.bg-stone-200{--tw-bg-opacity:1;background-color:rgb(231 229 228 / var(--tw-bg-opacity, 1))}.bg-stone-50{--tw-bg-opacity:1;background-color:rgb(250 250 249 / var(--tw-bg-opacity, 1))}.bg-white{--tw-bg-opacity:1;background-color:rgb(255 255 255 / var(--tw-bg-opacity, 1))}.p-2{padding:0.5rem}.p-3{padding:0.75rem}.p-4{padding:1rem}.p-5{padding:1.25rem}.p-6{padding:1.5rem}.p-8{padding:2rem}.px-1\.5{padding-left:0.375rem;padding-right:0.375rem}.px-2{padding-left:0.5rem;padding-right:0.5rem}.px-3{padding-left:0.75rem;padding-right:0.75rem}.px-4{padding-left:1rem;padding-right:1rem}.py-0\.5{padding-top:0.125rem;padding-bottom:0.125rem}.py-1{padding-top:0.25rem;padding-bottom:0.25rem}.py-12{padding-top:3rem;padding-bottom:3rem}.py-2{padding-top:0.5rem;padding-bottom:0.5rem}.pb-8{padding-bottom:2rem}.pl-4{padding-left:1rem}.pl-5{padding-left:1.25rem}.pt-0\.5{padding-top:0.125rem}.pt-1{padding-top:0.25rem}.pt-2{padding-top:0.5rem}.text-center{text-align:center}.font-sans{font-family:ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji"}.font-serif{font-family:ui-serif, Georgia, Cambria, "Times New Roman", Times, serif}.text-2xl{font-size:1.5rem;line-height:2rem}.text-3xl{font-size:1.875rem;line-height:2.25rem}.text-4xl{font-size:2.25rem;line-height:2.5rem}.text-\[10px\]{font-size:10px}.text-sm{font-size:0.875rem;line-height:1.25rem}.text-xs{font-size:0.75rem;line-height:1rem}.font-semibold{font-weight:600}.leading-5{line-height:1.25rem}.leading-relaxed{line-height:1.625}.tracking-tight{letter-spacing:-0.025em}.text-amber-700{--tw-text-opacity:1;color:rgb(180 83 9 / var(--tw-text-opacity, 1))}.text-amber-800{--tw-text-opacity:1;color:rgb(146 64 14 / var(--tw-text-opacity, 1))}.text-amber-900{--tw-text-opacity:1;color:rgb(120 53 15 / var(--tw-text-opacity, 1))}.text-emerald-300{--tw-text-opacity:1;color:rgb(110 231 183 / var(--tw-text-opacity, 1))}.text-emerald-700{--tw-text-opacity:1;color:rgb(4 120 87 / var(--tw-text-opacity, 1))}.text-emerald-800{--tw-text-opacity:1;color:rgb(6 95 70 / var(--tw-text-opacity, 1))}.text-emerald-900{--tw-text-opacity:1;color:rgb(6 78 59 / var(--tw-text-opacity, 1))}.text-red-700{--tw-text-opacity:1;color:rgb(185 28 28 / var(--tw-text-opacity, 1))}.text-red-800{--tw-text-opacity:1;color:rgb(153 27 27 / var(--tw-text-opacity, 1))}.text-sky-700{--tw-text-opacity:1;color:rgb(3 105 161 / var(--tw-text-opacity, 1))}.text-sky-800{--tw-text-opacity:1;color:rgb(7 89 133 / var(--tw-text-opacity, 1))}.text-slate-100{--tw-text-opacity:1;color:rgb(241 245 249 / var(--tw-text-opacity, 1))}.text-slate-300{--tw-text-opacity:1;color:rgb(203 213 225 / var(--tw-text-opacity, 1))}.text-slate-400{--tw-text-opacity:1;color:rgb(148 163 184 / var(--tw-text-opacity, 1))}.text-slate-500{--tw-text-opacity:1;color:rgb(100 116 139 / var(--tw-text-opacity, 1))}.text-slate-600{--tw-text-opacity:1;color:rgb(71 85 105 / var(--tw-text-opacity, 1))}.text-slate-700{--tw-text-opacity:1;color:rgb(51 65 85 / var(--tw-text-opacity, 1))}.text-slate-900{--tw-text-opacity:1;color:rgb(15 23 42 / var(--tw-text-opacity, 1))}.text-stone-700{--tw-text-opacity:1;color:rgb(68 64 60 / var(--tw-text-opacity, 1))}.text-white{--tw-text-opacity:1;color:rgb(255 255 255 / var(--tw-text-opacity, 1))}.underline{-webkit-text-decoration-line:underline;text-decoration-line:underline}.decoration-emerald-400{-webkit-text-decoration-color:#34d399;text-decoration-color:#34d399}.underline-offset-4{text-underline-offset:4px}.shadow-sm{--tw-shadow:0 1px 2px 0 rgb(0 0 0 / 0.05);--tw-shadow-colored:0 1px 2px 0 var(--tw-shadow-color);box-shadow:var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow)}@media (min-width: 640px){.sm\:grid-cols-\[110px_1fr\]{grid-template-columns:110px 1fr}.sm\:p-8{padding:2rem}.sm\:px-6{padding-left:1.5rem;padding-right:1.5rem}.sm\:text-5xl{font-size:3rem;line-height:1}}@media (min-width: 768px){.md\:grid-cols-2{grid-template-columns:repeat(2, minmax(0, 1fr))}}@media (min-width: 1024px){.lg\:grid-cols-2{grid-template-columns:repeat(2, minmax(0, 1fr))}.lg\:grid-cols-3{grid-template-columns:repeat(3, minmax(0, 1fr))}.lg\:grid-cols-4{grid-template-columns:repeat(4, minmax(0, 1fr))}}</style></head>
+  <body class="bg-stone-50 text-slate-900 font-sans">
+    <main class="max-w-6xl mx-auto px-4 sm:px-6 py-12 space-y-14">
+
+      <!-- ================= HEADER ================= -->
+      <header class="space-y-4">
+        <p class="schem text-slate-500">Architecture review · lens: test sprawl</p>
+        <h1 class="font-serif text-4xl sm:text-5xl tracking-tight">reactfe-raw</h1>
+        <p class="text-sm text-slate-500">2026-10-08 · HEAD <span class="mono">8db7fd82</span> · whole <span class="mono">src/</span> · no <span class="mono">CONTEXT.md</span> or <span class="mono">docs/adr/</span> in the repo, so domain terms come from CLAUDE.md</p>
+        <div class="flex flex-wrap gap-5 text-xs text-slate-600 pt-2">
+          <span class="flex items-center gap-2"><span class="inline-block w-6 h-4 border-2 border-slate-400 bg-white"></span>module</span>
+          <span class="flex items-center gap-2"><svg width="28" height="8"><line x1="0" y1="4" x2="28" y2="4" stroke="#334155" stroke-width="2" class="seam"></line></svg>seam</span>
+          <span class="flex items-center gap-2"><svg width="28" height="8"><line x1="0" y1="4" x2="28" y2="4" stroke="#dc2626" stroke-width="2"></line></svg>leak / test reaching past the interface</span>
+          <span class="flex items-center gap-2"><span class="inline-block w-6 h-4 deep rounded-sm"></span>deep module</span>
+          <span class="flex items-center gap-2"><span class="chip-t">T</span>a test file</span>
+        </div>
+      </header>
+
+      <!-- ================= INVENTORY ================= -->
+      <section id="inventory" class="space-y-8">
+        <h2 class="font-serif text-2xl">The estate, measured</h2>
+
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-px bg-stone-200 rounded-xl overflow-hidden border border-stone-200">
+          <div class="bg-white p-5"><div class="text-3xl font-serif">726</div><div class="text-xs text-slate-500 mt-1">test files · 1,222 source files</div></div>
+          <div class="bg-white p-5"><div class="text-3xl font-serif">158.7k</div><div class="text-xs text-slate-500 mt-1">test LOC · 199.5k source LOC</div></div>
+          <div class="bg-white p-5"><div class="text-3xl font-serif">86%</div><div class="text-xs text-slate-500 mt-1">of tests named after one source file (624/726)</div></div>
+          <div class="bg-white p-5"><div class="text-3xl font-serif">663</div><div class="text-xs text-slate-500 mt-1"><span class="mono">vi.mock</span> calls in 276 files</div></div>
+          <div class="bg-white p-5"><div class="text-3xl font-serif text-red-700">195</div><div class="text-xs text-slate-500 mt-1">of those mock a sibling in the same feature</div></div>
+          <div class="bg-white p-5"><div class="text-3xl font-serif">343</div><div class="text-xs text-slate-500 mt-1">local factory/render helpers · <span class="mono">makeWidget</span> ×30</div></div>
+          <div class="bg-white p-5"><div class="text-3xl font-serif text-red-700">23</div><div class="text-xs text-slate-500 mt-1">tests that regex the source text (<span class="mono">readFileSync</span>)</div></div>
+          <div class="bg-white p-5"><div class="text-3xl font-serif">50</div><div class="text-xs text-slate-500 mt-1">test bodies edited by <span class="mono">refactor:</span> commits (+27 deleted, 31 added)</div></div>
+        </div>
+
+        <div class="grid lg:grid-cols-2 gap-8">
+          <!-- where the tests are -->
+          <div class="rounded-xl border border-stone-200 bg-white p-6 space-y-3">
+            <p class="schem text-slate-500">Where the test files are</p>
+            <div class="space-y-1.5 text-xs">
+              <div class="flex items-center gap-2"><span class="w-40 mono truncate">features/Report</span><div class="h-4 bg-slate-800 rounded-sm" style="width:72%"></div><span>518</span></div>
+              <div class="flex items-center gap-2"><span class="w-40 mono truncate">services</span><div class="h-4 bg-slate-400 rounded-sm" style="width:6.5%"></div><span>47</span></div>
+              <div class="flex items-center gap-2"><span class="w-40 mono truncate">features/Chat</span><div class="h-4 bg-slate-400 rounded-sm" style="width:3.9%"></div><span>28</span></div>
+              <div class="flex items-center gap-2"><span class="w-40 mono truncate">features/Uploads</span><div class="h-4 bg-slate-400 rounded-sm" style="width:2.8%"></div><span>20</span></div>
+              <div class="flex items-center gap-2"><span class="w-40 mono truncate">23 other areas</span><div class="h-4 bg-slate-300 rounded-sm" style="width:15%"></div><span>113</span></div>
+            </div>
+            <ul class="text-sm text-slate-700 space-y-1 pt-2">
+              <li>Report has 122.0k LOC of tests and 106.1k LOC of source.</li>
+              <li><span class="mono">widgets/table/hooks/</span>: 118 test files for 58 sources.</li>
+              <li>54 sources own 221 test files between them. Three hooks own 59: <span class="mono">useTableWidgetInfiniteScroll</span> 23, <span class="mono">useTableWidget</span> 19, <span class="mono">useTableEditState</span> 17.</li>
+            </ul>
+          </div>
+          <!-- what the mocks hit -->
+          <div class="rounded-xl border border-stone-200 bg-white p-6 space-y-3">
+            <p class="schem text-slate-500">What the 663 mocks replace</p>
+            <div class="flex h-6 rounded overflow-hidden text-[10px] text-white font-semibold">
+              <div class="bg-emerald-700 flex items-center justify-center" style="width:41%">API seam 272</div>
+              <div class="bg-red-600 flex items-center justify-center" style="width:29.4%">same feature 195</div>
+              <div class="bg-amber-500 flex items-center justify-center" style="width:10.1%">x-feat 67</div>
+              <div class="bg-slate-500 flex items-center justify-center" style="width:19.5%">externals 129</div>
+            </div>
+            <ul class="text-sm text-slate-700 space-y-1 pt-1">
+              <li><span class="mono">@/services/planEditApi</span> is mocked in 56 files, which between them stub 18 different functions.</li>
+              <li><span class="mono">./useTableWidgetInfiniteScroll</span> is mocked in 21 files. Each replaces a 2,900-line hook with an untyped stub.</li>
+              <li>129 files build their own <span class="mono">QueryClientProvider</span>. <span class="mono">src/test/</span> has no render helper and no fixtures.</li>
+              <li>12 files hand-roll a fake SSE stream.</li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- hypothesis verdict + mechanism -->
+        <div class="rounded-xl border-2 border-slate-800 bg-white p-6 space-y-5">
+          <div class="flex flex-wrap items-baseline gap-3">
+            <span class="schem bg-amber-100 text-amber-900 px-2 py-1 rounded">Your hypothesis: half right</span>
+            <p class="text-sm text-slate-700">The helpers are shallow, but they aren't the cause. The cause is a few modules whose <b>interfaces are too wide to drive</b>. Tests route around those interfaces in four ways, and every route adds files.</p>
+          </div>
+          <svg viewBox="0 0 980 300" class="w-full" role="img" aria-label="Wide interface mechanism">
+            <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#334155"></path></marker>
+            <marker id="ahr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#dc2626"></path></marker></defs>
+            <!-- wide interface -->
+            <rect x="20" y="20" width="300" height="88" rx="6" fill="#fff" stroke="#334155" stroke-width="2"></rect>
+            <rect x="20" y="20" width="300" height="56" rx="6" fill="#fee2e2" stroke="#334155" stroke-width="2"></rect>
+            <text x="170" y="42" text-anchor="middle" class="schem" fill="#7f1d1d">wide interface</text>
+            <text x="170" y="62" text-anchor="middle" font-size="11" fill="#7f1d1d">34 inputs · 27→49 · 97-field context</text>
+            <text x="170" y="97" text-anchor="middle" class="schem" fill="#334155">implementation · 2,900–4,800 LOC</text>
+            <text x="20" y="134" font-size="11" fill="#475569">useTableWidget · useTableWidgetInfiniteScroll</text>
+            <text x="20" y="150" font-size="11" fill="#475569">useTableEditState · TableEditContext · useScenarioSettings</text>
+            <!-- four routes -->
+            <g font-size="11" fill="#0f172a">
+              <path d="M320 40 C 420 40, 420 40, 520 40" stroke="#334155" stroke-width="1.5" fill="none" marker-end="url(#ah)"></path>
+              <rect x="525" y="18" width="440" height="46" rx="5" fill="#f8fafc" stroke="#cbd5e1"></rect>
+              <text x="537" y="36" class="schem" fill="#334155">1 · split the suite by scenario</text>
+              <text x="537" y="54">23 / 19 / 17 test files on three hooks, e.g. useTableWidget.lockTint.test.tsx</text>
+
+              <path d="M320 64 C 420 64, 420 100, 520 100" stroke="#334155" stroke-width="1.5" fill="none" marker-end="url(#ah)"></path>
+              <rect x="525" y="78" width="440" height="46" rx="5" fill="#f8fafc" stroke="#cbd5e1"></rect>
+              <text x="537" y="96" class="schem" fill="#334155">2 · peel off a one-caller helper, test that</text>
+              <text x="537" y="114">127 pure modules · buildBucketDrillTree: 21 test calls → 1 call site</text>
+
+              <path d="M320 84 C 420 84, 420 160, 520 160" stroke="#dc2626" stroke-width="1.5" fill="none" marker-end="url(#ahr)"></path>
+              <rect x="525" y="138" width="440" height="46" rx="5" fill="#fef2f2" stroke="#fca5a5"></rect>
+              <text x="537" y="156" class="schem" fill="#991b1b">3 · stub the sibling module</text>
+              <text x="537" y="174">21 files stub the read path; one stub returns 26 of the hook's 49 fields</text>
+
+              <path d="M320 100 C 420 100, 420 220, 520 220" stroke="#dc2626" stroke-width="1.5" fill="none" marker-end="url(#ahr)"></path>
+              <rect x="525" y="198" width="440" height="46" rx="5" fill="#fef2f2" stroke="#fca5a5"></rect>
+              <text x="537" y="216" class="schem" fill="#991b1b">4 · regex the source text</text>
+              <text x="537" y="234">23 files · 2363e6b3 reformatted 654 lines "to satisfy source assertions"</text>
+            </g>
+            <rect x="20" y="262" width="945" height="30" rx="5" fill="#0f172a"></rect>
+            <text x="34" y="282" font-size="12" fill="#f1f5f9">Cost: 5 shipped bugs where the helper's test stayed green and the bug sat in the hook calling it (08704405 · 46b110a1 · dd207332 · 0d0fd0af · 7228889d)</text>
+          </svg>
+        </div>
+
+        <div class="grid lg:grid-cols-3 gap-6 text-sm">
+          <div class="rounded-xl border border-stone-200 bg-white p-5 space-y-2">
+            <p class="schem text-slate-500">Co-change</p>
+            <ul class="space-y-1 text-slate-700">
+              <li>87% of commits that touch a mirrored test also touch its source file.</li>
+              <li>The 119 commits labelled <span class="mono">refactor:</span> changed test files 244 times:
+                <ul class="pl-4 list-disc">
+                  <li>82 pure renames</li>
+                  <li>54 import-path-only edits</li>
+                  <li>50 edits that changed a test body</li>
+                  <li>31 test files added, 27 deleted</li>
+                </ul>
+              </li>
+              <li>Age: 438 test files changed in the last 30 days. 273 were written once and never touched again.</li>
+            </ul>
+          </div>
+          <div class="rounded-xl border border-stone-200 bg-white p-5 space-y-2">
+            <p class="schem text-slate-500">Exports kept alive by tests</p>
+            <ul class="space-y-1 text-slate-700">
+              <li><span class="mono">widgets/table/</span> has 78 exported values that no production code imports.</li>
+              <li><span class="mono">planEditApi</span> has 9 such values, including <span class="mono">_buildEditBodyForTest</span> and 3 other body builders.</li>
+              <li>205 of the 493 exported functions in <span class="mono">table/</span> have bodies of 4 lines or fewer.</li>
+            </ul>
+          </div>
+          <div class="rounded-xl border border-stone-200 bg-white p-5 space-y-2">
+            <p class="schem text-slate-500">Gaps (not candidates)</p>
+            <ul class="space-y-1 text-slate-700">
+              <li>Test files / source files: Authentication 0/11, AgentAnalytics 0/20, AdminUploadConfig 0/8, ScheduledRuns 3/31, Uploads 20/79.</li>
+              <li>All of these can be tested through today's interfaces, so none needs a structural change.</li>
+              <li>No wire test exists for 8 plan endpoints. <span class="mono">planLockStream.ts</span> has no test at all (see #2).</li>
+            </ul>
+          </div>
+        </div>
+        <p class="text-xs text-slate-500">Tooling doesn't care where tests live: the vitest glob is <span class="mono">src/**/*.{test,spec}.{ts,tsx}</span> and CI runs 4 shards by file. CLAUDE.md's count of "340 files" is stale; the real number is 726.</p>
+      </section>
+
+      <!-- ================= CANDIDATES ================= -->
+      <section id="candidates" class="space-y-12">
+        <h2 class="font-serif text-2xl">Candidates</h2>
+
+        <!-- ===== 1 ===== -->
+        <article id="c1" class="rounded-2xl border border-stone-200 bg-white shadow-sm p-6 sm:p-8 space-y-6">
+          <header class="space-y-3">
+            <p class="schem text-slate-400">01</p>
+            <h3 class="font-serif text-2xl">Collapse cell writability into one verdict</h3>
+            <div class="flex flex-wrap gap-2 text-xs">
+              <span class="px-2 py-1 rounded-full bg-emerald-100 text-emerald-800 font-semibold">Strong</span>
+              <span class="px-2 py-1 rounded-full bg-slate-100 text-slate-700">in-process</span>
+              <span class="px-2 py-1 rounded-full bg-stone-100 text-stone-700">20 test files → 2 suites</span>
+            </div>
+          </header>
+          <div class="mono text-xs text-slate-600 leading-relaxed">
+            table/locks/{cellLock, nodeLocks, planningLock, planningRefusal, rolldownHolds}.ts · table/editing/{buildEditScope, metricRowScope}.ts · table/interaction/GridLockContext · dashboard/plan/planScopeWritability · hooks/report/usePlanLockWritability — assembled in useTableWidget.ts, useTableColumnDefs.tsx, EditableCell.tsx, TableWidget.tsx
+          </div>
+          <div class="grid md:grid-cols-2 gap-6">
+            <figure class="rounded-lg border border-stone-200 p-4 diagram">
+              <figcaption class="schem text-slate-500 mb-2">Before · 10 modules, 4 call sites, wiring untested</figcaption>
+              <svg viewBox="0 0 460 320" class="w-full">
+                <g font-size="10" fill="#0f172a">
+                  <g id="mods">
+                    <rect x="8" y="8" width="132" height="22" rx="3" fill="#fff" stroke="#94a3b8"></rect><text x="16" y="23">cellLock</text>
+                    <rect x="8" y="38" width="132" height="22" rx="3" fill="#fff" stroke="#94a3b8"></rect><text x="16" y="53">nodeLocks</text>
+                    <rect x="8" y="68" width="132" height="22" rx="3" fill="#fff" stroke="#94a3b8"></rect><text x="16" y="83">planningLock</text>
+                    <rect x="8" y="98" width="132" height="22" rx="3" fill="#fff" stroke="#94a3b8"></rect><text x="16" y="113">planningRefusal</text>
+                    <rect x="8" y="128" width="132" height="22" rx="3" fill="#fff" stroke="#94a3b8"></rect><text x="16" y="143">rolldownHolds</text>
+                    <rect x="8" y="158" width="132" height="22" rx="3" fill="#fff" stroke="#94a3b8"></rect><text x="16" y="173">buildEditScope</text>
+                    <rect x="8" y="188" width="132" height="22" rx="3" fill="#fff" stroke="#94a3b8"></rect><text x="16" y="203">metricRowScope</text>
+                    <rect x="8" y="218" width="132" height="22" rx="3" fill="#fff" stroke="#94a3b8"></rect><text x="16" y="233">GridLockContext</text>
+                    <rect x="8" y="248" width="132" height="22" rx="3" fill="#fff" stroke="#94a3b8"></rect><text x="16" y="263">planScopeWritability</text>
+                    <rect x="8" y="278" width="132" height="22" rx="3" fill="#fff" stroke="#94a3b8"></rect><text x="16" y="293">usePlanLockWritability</text>
+                  </g>
+                  <g fill="#d1fae5" stroke="#10b981">
+                    <rect x="146" y="12" width="14" height="14" rx="2"></rect><rect x="146" y="42" width="14" height="14" rx="2"></rect><rect x="146" y="72" width="14" height="14" rx="2"></rect><rect x="146" y="102" width="14" height="14" rx="2"></rect><rect x="146" y="132" width="14" height="14" rx="2"></rect><rect x="146" y="162" width="14" height="14" rx="2"></rect><rect x="146" y="192" width="14" height="14" rx="2"></rect><rect x="146" y="222" width="14" height="14" rx="2"></rect><rect x="146" y="252" width="14" height="14" rx="2"></rect><rect x="146" y="282" width="14" height="14" rx="2"></rect>
+                  </g>
+                  <g stroke="#cbd5e1" stroke-width="1" fill="none">
+                    <path d="M160 19 C 230 19, 230 40, 300 40"></path><path d="M160 49 C 230 49, 230 40, 300 40"></path><path d="M160 79 C 230 79, 230 115, 300 115"></path><path d="M160 109 C 230 109, 230 40, 300 40"></path><path d="M160 139 C 230 139, 230 190, 300 190"></path><path d="M160 229 C 230 229, 230 190, 300 190"></path><path d="M160 289 C 230 289, 230 265, 300 265"></path>
+                  </g>
+                  <g stroke="#dc2626" stroke-width="2" fill="none">
+                    <path d="M160 169 C 230 169, 230 115, 300 115"></path>
+                    <path d="M160 199 C 230 199, 230 190, 300 190"></path>
+                    <path d="M160 259 C 230 259, 230 265, 300 265"></path>
+                  </g>
+                  <rect x="300" y="22" width="152" height="36" rx="4" fill="#f1f5f9" stroke="#334155" stroke-width="1.5"></rect><text x="310" y="44">useTableWidget</text>
+                  <rect x="300" y="97" width="152" height="36" rx="4" fill="#f1f5f9" stroke="#334155" stroke-width="1.5"></rect><text x="310" y="119">useTableColumnDefs</text>
+                  <rect x="300" y="172" width="152" height="36" rx="4" fill="#f1f5f9" stroke="#334155" stroke-width="1.5"></rect><text x="310" y="194">EditableCell</text>
+                  <rect x="300" y="247" width="152" height="36" rx="4" fill="#f1f5f9" stroke="#334155" stroke-width="1.5"></rect><text x="310" y="269">TableWidget</text>
+                  <g fill="#dc2626" font-weight="700" font-size="9">
+                    <text x="214" y="138">✕ RT1-4070</text><text x="214" y="182">✕ RT1-4505</text><text x="214" y="254">✕ RT1-4503</text>
+                  </g>
+                </g>
+              </svg>
+            </figure>
+            <figure class="rounded-lg border border-stone-200 p-4 diagram">
+              <figcaption class="schem text-slate-500 mb-2">After · one deep module, call sites render its verdict</figcaption>
+              <svg viewBox="0 0 460 320" class="w-full">
+                <defs><linearGradient id="dg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0f172a"></stop><stop offset="1" stop-color="#1e293b"></stop></linearGradient>
+                <marker id="ah1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#334155"></path></marker></defs>
+                <rect x="20" y="20" width="220" height="40" rx="6" fill="#fff" stroke="#0f172a" stroke-width="3"></rect>
+                <text x="130" y="38" text-anchor="middle" class="schem" fill="#0f172a">interface</text>
+                <text x="130" y="53" text-anchor="middle" font-size="10" class="mono" fill="#0f172a">verdict(plan, cell) → {writable, reason}</text>
+                <rect x="20" y="60" width="220" height="240" rx="6" fill="url(#dg)"></rect>
+                <g font-size="10" fill="#64748b">
+                  <text x="36" y="88">plan lock · node locks</text><text x="36" y="110">period locks · rolldown holds</text><text x="36" y="132">planning level · refusal</text><text x="36" y="154">edit scope · metric-row scope</text><text x="36" y="176">plan_scope.allows() mirror</text><text x="36" y="198">workflow stage (viewed, not config)</text>
+                </g>
+                <text x="130" y="280" text-anchor="middle" class="schem" fill="#e2e8f0">cell writability</text>
+                <rect x="250" y="270" width="16" height="16" rx="3" fill="#d1fae5" stroke="#10b981"></rect><text x="272" y="283" font-size="10" fill="#065f46">1 suite, no mocks</text>
+                <g font-size="10" fill="#0f172a">
+                  <rect x="320" y="30" width="130" height="30" rx="4" fill="#f8fafc" stroke="#94a3b8"></rect><text x="330" y="49">useTableWidget</text>
+                  <rect x="320" y="80" width="130" height="30" rx="4" fill="#f8fafc" stroke="#94a3b8"></rect><text x="330" y="99">useTableColumnDefs</text>
+                  <rect x="320" y="130" width="130" height="30" rx="4" fill="#f8fafc" stroke="#94a3b8"></rect><text x="330" y="149">EditableCell</text>
+                  <rect x="320" y="180" width="130" height="30" rx="4" fill="#f8fafc" stroke="#94a3b8"></rect><text x="330" y="199">TableWidget</text>
+                </g>
+                <g stroke="#334155" stroke-width="1.5" fill="none">
+                  <path d="M240 40 L 318 45" marker-end="url(#ah1)"></path><path d="M240 40 L 318 95" marker-end="url(#ah1)"></path><path d="M240 40 L 318 145" marker-end="url(#ah1)"></path><path d="M240 40 L 318 195" marker-end="url(#ah1)"></path>
+                </g>
+                <text x="320" y="236" font-size="10" fill="#475569">render the verdict;</text><text x="320" y="250" font-size="10" fill="#475569">compute none of it</text>
+                <rect x="320" y="262" width="16" height="16" rx="3" fill="#d1fae5" stroke="#10b981"></rect><text x="342" y="275" font-size="10" fill="#065f46">+1 render suite</text>
+              </svg>
+            </figure>
+          </div>
+          <dl class="grid sm:grid-cols-[110px_1fr] gap-x-4 gap-y-2 text-sm">
+            <dt class="schem text-slate-500 pt-0.5">Problem</dt><dd>Ten shallow modules in five directories each answer part of "can this cell be written, and why not". Each is tested with its inputs handed straight in, so the code that combines them in four call sites is never tested, and three shipped bugs sat in exactly that code.</dd>
+            <dt class="schem text-slate-500 pt-0.5">Solution</dt><dd>One deep module takes the plan's state and a cell and returns <span class="mono">{writable, reason}</span>. The four call sites render that verdict instead of computing pieces of it.</dd>
+            <dt class="schem text-slate-500 pt-0.5">Evidence</dt><dd><ul class="list-disc pl-4 space-y-0.5">
+              <li><span class="mono">08704405</span> RT1-4503: removing <span class="mono">config.workflowStage</span> "left all 26 tests passing".</li>
+              <li><span class="mono">46b110a1</span> RT1-4505: TableWidget never supplied <span class="mono">periodLock.nonEditableBuckets</span>, and "the test that said otherwise built the field by hand".</li>
+              <li><span class="mono">dd207332</span> RT1-4070: <span class="mono">metricRowScope</span> was correct, but 3 callers never used it.</li>
+              <li>Planning lock is tested at 4 levels and pin at 3, but no test combines the levels.</li></ul></dd>
+          </dl>
+          <div class="flex flex-wrap gap-2 text-xs">
+            <span class="px-2 py-1 bg-slate-900 text-white rounded">locality: wiring bugs land in one module</span>
+            <span class="px-2 py-1 bg-slate-900 text-white rounded">leverage: one verdict, four call sites</span>
+            <span class="px-2 py-1 bg-slate-900 text-white rounded">interface is the test surface</span>
+          </div>
+          <div class="rounded-lg bg-stone-50 border border-stone-200 p-4 text-sm space-y-2">
+            <p class="schem text-slate-500">Tests · 20 → 2 suites · 4 unchanged</p>
+            <ul class="space-y-1.5">
+              <li><b class="text-amber-700">Merge</b> into the <i>verdict suite</i> (12 files): <span class="mono text-xs">locks/__tests__/{drilledNodeEditLevel, nestedDerivedNodes, nodeLocks, planningLock, planningRefusal, rolldownHolds}, editing/__tests__/{buildEditScope, metricRowScope}, hooks/useTableWidget.cellLockedByOther, interaction/GridLockContext, dashboard/plan/planScopeWritability, hooks/report/usePlanLockWritability</span></li>
+              <li><b class="text-amber-700">Merge</b> into a <i>"locked cells render locked"</i> suite that mounts TableWidget (8 files): <span class="mono text-xs">useTableWidget.{lockTint, weekLock, planningLock, axisReadOnly, lockSiblingsWindow}, useTableColumnDefs.planningLock, EditableCell.{periodLock, readOnlyReason}</span></li>
+              <li><b class="text-emerald-700">Survive</b> unchanged: <span class="mono text-xs">TableWidget.{planningLockDrill, lockMount}, useTableEditState.planningLock, drillDown/planningLevelDrill</span>. <span class="mono text-xs">planEditApi.periodLock</span> moves to #2.</li>
+              <li><b class="text-sky-700">New</b>: one wiring case per shipped bug:
+                <ul class="pl-4 list-disc">
+                  <li>The viewed stage, not the config stage, decides whether a compare cell is writable.</li>
+                  <li>A closed week is read-only once TableWidget mounts with period locks.</li>
+                  <li>A scope-gated cell refuses the edit on every path that can edit it.</li>
+                </ul>
+              </li>
+              <li><b class="text-slate-700">Delete</b>: none. Every case moves into one of the two suites.</li>
+            </ul>
+            <p><b>Mocks that go</b>:
+              </p><ul class="pl-4 list-disc">
+                <li>5 × <span class="mono">vi.mock("./useTableWidgetInfiniteScroll")</span>, one in each <span class="mono">useTableWidget.*Lock*</span> / <span class="mono">axisReadOnly</span> file.</li>
+                <li>Hand calls to <span class="mono">table.options.muiTableBodyCellProps</span> (lockTint, weekLock).</li>
+                <li>Hand-built <span class="mono">periodLock</span> fields.</li>
+              </ul>
+            <p></p>
+          </div>
+        </article>
+
+        <!-- ===== 2 ===== -->
+        <article id="c2" class="rounded-2xl border border-stone-200 bg-white shadow-sm p-6 sm:p-8 space-y-6">
+          <header class="space-y-3">
+            <p class="schem text-slate-400">02</p>
+            <h3 class="font-serif text-2xl">Move the plan backend seam to the wire</h3>
+            <div class="flex flex-wrap gap-2 text-xs">
+              <span class="px-2 py-1 rounded-full bg-emerald-100 text-emerald-800 font-semibold">Strong</span>
+              <span class="px-2 py-1 rounded-full bg-slate-100 text-slate-700">ports &amp; adapters</span>
+              <span class="px-2 py-1 rounded-full bg-stone-100 text-stone-700">56 mock blocks → 1 adapter</span>
+              <span class="px-2 py-1 rounded-full bg-sky-100 text-sky-800">unlocks #3 #5 #7 #8</span>
+            </div>
+          </header>
+          <div class="mono text-xs text-slate-600 leading-relaxed">
+            services/planEditApi.ts (3,567 LOC · 30 value exports · 9 concerns) · services/apiClient.ts (authenticatedFetch) · services/planLockStream.ts · services/planUndoApi.ts · services/orgWorkflowStagesApi.ts · the 56 test files that mock @/services/planEditApi
+          </div>
+          <div class="grid md:grid-cols-2 gap-6">
+            <figure class="rounded-lg border border-stone-200 p-4 diagram space-y-2">
+              <figcaption class="schem text-slate-500">Before · substituted function by function</figcaption>
+              <div class="h-12 border-l-4 border-slate-400 bg-slate-50 px-3 flex items-center justify-between text-xs"><span>hook &amp; TableWidget tests</span><span class="text-slate-500">56 files</span></div>
+              <div class="relative h-20 border-l-4 border-red-600 bg-red-50 px-3 py-2 text-xs">
+                <div class="font-semibold text-red-800">planEditApi · hand-stubbed per file</div>
+                <div class="text-red-700">18 functions stubbed · 34 files replace the whole module → unlisted exports are <span class="mono">undefined</span></div>
+                <div class="text-red-700">fetchHolds stub ×14 · "persisted" literal ×19 · SSE fakes ×12</div>
+              </div>
+              <div class="h-12 border-l-4 border-slate-300 bg-white px-3 flex items-center text-xs text-slate-400">authenticatedFetch · never reached by hook tests</div>
+              <div class="h-12 border-l-4 border-slate-300 bg-white px-3 flex items-center text-xs text-slate-400">network</div>
+              <div class="h-14 border border-dashed border-red-400 rounded px-3 flex items-center text-xs text-red-700">planEditApi's own 12 tests reach past its interface: <span class="mono ml-1">_buildEditBodyForTest</span> + 3 other body builders</div>
+            </figure>
+            <figure class="rounded-lg border border-stone-200 p-4 diagram space-y-2">
+              <figcaption class="schem text-slate-500">After · the seam is the wire; two adapters make it real</figcaption>
+              <div class="h-12 border-l-4 border-slate-400 bg-slate-50 px-3 flex items-center justify-between text-xs"><span>hook &amp; TableWidget tests</span><span class="text-slate-500">56 files · no planEditApi mock</span></div>
+              <div class="h-12 border-l-4 border-slate-400 bg-white px-3 flex items-center text-xs">planEditApi · real · tested only through its public functions</div>
+              <svg viewBox="0 0 400 18" class="w-full"><line x1="0" y1="9" x2="400" y2="9" stroke="#0f172a" stroke-width="2" class="seam"></line><text x="6" y="6" font-size="8" fill="#0f172a" class="schem">seam · authenticatedFetch</text></svg>
+              <div class="grid grid-cols-2 gap-2">
+                <div class="h-24 rounded border-2 border-slate-400 bg-white p-2 text-xs"><div class="schem text-slate-500">adapter · prod</div><div class="mt-1">HTTP</div></div>
+                <div class="h-24 rounded deep p-2 text-xs text-slate-100"><div class="schem text-slate-400">adapter · tests</div><div class="mt-1">in-memory plan server</div><div class="text-slate-400 mt-1">records request bodies · emits SSE frames · holds or defers a response</div></div>
+              </div>
+            </figure>
+          </div>
+          <dl class="grid sm:grid-cols-[110px_1fr] gap-x-4 gap-y-2 text-sm">
+            <dt class="schem text-slate-500 pt-0.5">Problem</dt><dd>Tests that call planEditApi swap it out one function at a time, so the request each hook actually sends is never checked. Meanwhile planEditApi's own tests reach past its interface through test-only body builders.</dd>
+            <dt class="schem text-slate-500 pt-0.5">Solution</dt><dd>Fake the network at <span class="mono">authenticatedFetch</span>, which every request already passes through, with an in-memory plan server. It records bodies and emits frames through the real stream encoding. The real planEditApi and the real hooks then run against it.</dd>
+            <dt class="schem text-slate-500 pt-0.5">Evidence</dt><dd><ul class="list-disc pl-4 space-y-0.5">
+              <li><span class="mono">planDataYearAndGrainOnWire.test.tsx:5-10</span>: <span class="mono">scopeFilters</span> (RT1-4221) and <span class="mono">fiscalYear</span> (RT1-4255) were dropped from requests "while every hook-level spy stayed green".</li>
+              <li>11 of the last 25 commits that touched planEditApi tests changed no planEditApi behaviour.</li>
+              <li>No wire test exists for submitHold, fetchHolds, lockStatus, releasePlanLock, approve, publish or unpublish. <span class="mono">planLockStream.ts</span> is untested.</li></ul></dd>
+          </dl>
+          <div class="flex flex-wrap gap-2 text-xs">
+            <span class="px-2 py-1 bg-slate-900 text-white rounded">two adapters: a real seam</span>
+            <span class="px-2 py-1 bg-slate-900 text-white rounded">request bodies become assertable</span>
+            <span class="px-2 py-1 bg-slate-900 text-white rounded">stubs stop drifting</span>
+            <span class="px-2 py-1 bg-slate-900 text-white rounded">interface shrinks by 4 test-only exports</span>
+          </div>
+          <div class="rounded-lg bg-stone-50 border border-stone-200 p-4 text-sm space-y-2">
+            <p class="schem text-slate-500">Tests · planEditApi.* 12 → 5 · 56 callers keep their files</p>
+            <ul class="space-y-1.5">
+              <li><b class="text-amber-700">Merge</b> into a <i>read stream</i> suite: <span class="mono text-xs">appliedLevelStream, comparisonStages.verdict, drillMarker, planWatermark, rollupFreshness</span> (+ the read cases in <span class="mono text-xs">planEditApi.test.ts</span>)</li>
+              <li><b class="text-amber-700">Merge</b> into an <i>edits</i> suite: <span class="mono text-xs">batch, periodLock, viewCarriers</span>. They now assert the recorded body through <span class="mono text-xs">submitEditStream</span> / <span class="mono text-xs">submitEditBatchStream</span> instead of <span class="mono text-xs">_build…ForTest</span>.</li>
+              <li><b class="text-emerald-700">Survive</b>: <span class="mono text-xs">restore, workflowTransition</span>. The <span class="mono text-xs">getOrgWorkflowStages</span> cases leave <span class="mono text-xs">comparisonStages</span> for <span class="mono text-xs">orgWorkflowStagesApi</span>'s own suite.</li>
+              <li><b class="text-sky-700">New</b>:
+                <ul class="pl-4 list-disc">
+                  <li>A <i>locks &amp; holds</i> wire suite, filling today's gap.</li>
+                  <li>The plan server adapter itself.</li>
+                  <li>A contract case proving the server's frames parse through the real stream parser. CLAUDE.md: "build wire fixtures from the PARSER".</li>
+                </ul>
+              </li>
+              <li><b class="text-slate-700">Delete</b>: none. The 56 caller files survive and swap their mock block for one line that installs the server.</li>
+            </ul>
+            <p><b>Mocks that go</b>:
+              </p><ul class="pl-4 list-disc">
+                <li>56 × <span class="mono">vi.mock("@/services/planEditApi")</span> (57 lines).</li>
+                <li>12 hand-rolled SSE helpers become 1.</li>
+                <li>The fetchHolds ×14, node-lock ×10 and "persisted"-event ×19 stub literals.</li>
+                <li>The test-only exports <span class="mono">_buildPlanDataBodyForTest</span>, <span class="mono">_buildEditBodyForTest</span>, <span class="mono">_buildBatchEditBodyForTest</span> and <span class="mono">_buildRestoreBody</span>.</li>
+              </ul>
+            <p></p>
+          </div>
+        </article>
+
+        <!-- ===== 3 ===== -->
+        <article id="c3" class="rounded-2xl border border-stone-200 bg-white shadow-sm p-6 sm:p-8 space-y-6">
+          <header class="space-y-3">
+            <p class="schem text-slate-400">03</p>
+            <h3 class="font-serif text-2xl">Deepen the plan grid read path</h3>
+            <div class="flex flex-wrap gap-2 text-xs">
+              <span class="px-2 py-1 rounded-full bg-emerald-100 text-emerald-800 font-semibold">Strong</span>
+              <span class="px-2 py-1 rounded-full bg-slate-100 text-slate-700">ports &amp; adapters · needs #2</span>
+              <span class="px-2 py-1 rounded-full bg-stone-100 text-stone-700">40 test files → ~4 suites</span>
+            </div>
+          </header>
+          <div class="mono text-xs text-slate-600 leading-relaxed">
+            table/hooks/useTableWidgetInfiniteScroll.ts (2,900 LOC · 27 params · 49 results) · table/timeBuckets/ (12 modules) · consumer: table/hooks/useTableWidget.ts (4,801 LOC)
+          </div>
+          <div class="grid md:grid-cols-2 gap-6">
+            <figure class="rounded-lg border border-stone-200 p-4 diagram">
+              <figcaption class="schem text-slate-500 mb-2">Before · interface nearly as big as the implementation</figcaption>
+              <svg viewBox="0 0 460 300" class="w-full">
+                <rect x="20" y="10" width="170" height="140" fill="#fee2e2" stroke="#334155" stroke-width="2"></rect>
+                <g stroke="#fca5a5">
+                  <line x1="30" y1="30" x2="180" y2="30"></line><line x1="30" y1="42" x2="180" y2="42"></line><line x1="30" y1="54" x2="180" y2="54"></line><line x1="30" y1="66" x2="180" y2="66"></line><line x1="30" y1="78" x2="180" y2="78"></line><line x1="30" y1="90" x2="180" y2="90"></line><line x1="30" y1="102" x2="180" y2="102"></line><line x1="30" y1="114" x2="180" y2="114"></line><line x1="30" y1="126" x2="180" y2="126"></line>
+                </g>
+                <text x="105" y="143" text-anchor="middle" class="schem" fill="#7f1d1d">27 in · 49 out</text>
+                <rect x="20" y="150" width="170" height="140" fill="#f1f5f9" stroke="#334155" stroke-width="2"></rect>
+                <text x="105" y="225" text-anchor="middle" class="schem" fill="#334155">2,900 LOC</text>
+                <g font-size="9" fill="#0f172a">
+                  <g fill="#fff" stroke="#94a3b8">
+                    <rect x="230" y="150" width="92" height="18" rx="2"></rect><rect x="230" y="172" width="92" height="18" rx="2"></rect><rect x="230" y="194" width="92" height="18" rx="2"></rect><rect x="230" y="216" width="92" height="18" rx="2"></rect><rect x="230" y="238" width="92" height="18" rx="2"></rect><rect x="230" y="260" width="92" height="18" rx="2"></rect>
+                    <rect x="340" y="150" width="92" height="18" rx="2"></rect><rect x="340" y="172" width="92" height="18" rx="2"></rect><rect x="340" y="194" width="92" height="18" rx="2"></rect><rect x="340" y="216" width="92" height="18" rx="2"></rect><rect x="340" y="238" width="92" height="18" rx="2"></rect><rect x="340" y="260" width="92" height="18" rx="2"></rect>
+                  </g>
+                  <text x="235" y="163">buildBucketDrill…</text><text x="235" y="185">anchoredLeafFr…</text><text x="235" y="207">bucketWindowC…</text><text x="235" y="229">inFlightDedupe</text><text x="235" y="251">leafAxisWindows</text><text x="235" y="273">heldFrameRead</text>
+                  <text x="345" y="163">bucketDelta</text><text x="345" y="185">bucketWindowPr…</text><text x="345" y="207">leafFrameRange</text><text x="345" y="229">weekWindow</text><text x="345" y="251">frameEdgeHit</text><text x="345" y="273">isoWeekToMonth…</text>
+                </g>
+                <text x="230" y="140" font-size="10" fill="#475569">timeBuckets/ · 17 test files · most helpers have 1 caller</text>
+                <path d="M190 220 L 228 210" stroke="#94a3b8" fill="none"></path>
+                <g>
+                  <rect x="230" y="14" width="210" height="56" rx="4" fill="#fef2f2" stroke="#fca5a5"></rect>
+                  <text x="240" y="32" font-size="10" fill="#991b1b" class="schem">21 consumer tests</text>
+                  <text x="240" y="48" font-size="10" fill="#991b1b">swap the whole hook for an untyped stub</text>
+                  <text x="240" y="62" font-size="10" fill="#991b1b">(lockTint returns 26 of 49 fields)</text>
+                  <line x1="230" y1="42" x2="192" y2="60" stroke="#dc2626" stroke-width="2"></line>
+                </g>
+              </svg>
+            </figure>
+            <figure class="rounded-lg border border-stone-200 p-4 diagram">
+              <figcaption class="schem text-slate-500 mb-2">After · small interface, timeBuckets private</figcaption>
+              <svg viewBox="0 0 460 300" class="w-full">
+                <defs><linearGradient id="dg3" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0f172a"></stop><stop offset="1" stop-color="#1e293b"></stop></linearGradient></defs>
+                <rect x="100" y="10" width="260" height="34" fill="#fff" stroke="#0f172a" stroke-width="3"></rect>
+                <text x="230" y="32" text-anchor="middle" font-size="10" class="mono" fill="#0f172a">(widget, view) → rows · frames · totals · status</text>
+                <rect x="100" y="44" width="260" height="226" fill="url(#dg3)"></rect>
+                <g font-size="9" fill="#475569">
+                  <text x="116" y="72">windows · prefetch · in-flight dedupe</text>
+                  <text x="116" y="92">drill tree · grain · year</text>
+                  <text x="116" y="112">stage compare · rollup freshness</text>
+                  <text x="116" y="132">cache retention · restore</text>
+                  <text x="116" y="160">timeBuckets/* (12, private)</text>
+                </g>
+                <text x="230" y="255" text-anchor="middle" class="schem" fill="#e2e8f0">plan grid read path</text>
+                <line x1="100" y1="284" x2="360" y2="284" stroke="#0f172a" stroke-width="2" class="seam"></line>
+                <text x="230" y="296" text-anchor="middle" font-size="9" fill="#0f172a">seam · plan server (#2)</text>
+                <rect x="372" y="20" width="16" height="16" rx="3" fill="#d1fae5" stroke="#10b981"></rect><text x="372" y="54" font-size="9" fill="#065f46">~4 suites</text>
+                <text x="10" y="120" font-size="9" fill="#475569">useTableWidget</text><text x="10" y="132" font-size="9" fill="#475569">uses the real one</text>
+                <line x1="84" y1="126" x2="98" y2="126" stroke="#334155"></line>
+              </svg>
+            </figure>
+          </div>
+          <dl class="grid sm:grid-cols-[110px_1fr] gap-x-4 gap-y-2 text-sm">
+            <dt class="schem text-slate-500 pt-0.5">Problem</dt><dd>The read path takes 27 inputs and returns 49 fields. That is too wide to drive, so tests peel its logic out into helpers with a single caller (<span class="mono">buildBucketDrillTree</span>: 21 test calls, 1 call site), and every consumer test replaces the whole hook with a stub.</dd>
+            <dt class="schem text-slate-500 pt-0.5">Solution</dt><dd>Give the read path a small interface: a widget and a view (grain, year, drill, pane, frame) go in, and rows, frames, totals and read status come out. <span class="mono">timeBuckets/</span> becomes private implementation, and the tests run against #2's plan server.</dd>
+            <dt class="schem text-slate-500 pt-0.5">Evidence</dt><dd><ul class="list-disc pl-4 space-y-0.5">
+              <li><span class="mono">7228889d</span> RT1-4988: <span class="mono">advanceLeafFrame</span> read only <span class="mono">heldWindowPages()[0]</span>, even though the correct fold already existed in <span class="mono">leafAxisWindows</span>.</li>
+              <li><span class="mono">2363e6b3</span>: 654 lines reformatted only to keep tests that regex the source passing.</li>
+              <li><span class="mono">bucketWindowComposeInvalidation.test.ts</span> imports no module from this repo; it is testing TanStack Query.</li>
+              <li><span class="mono">makeWidget</span> is redeclared in 22 read-path files, 7 of them byte-identical.</li></ul></dd>
+          </dl>
+          <div class="flex flex-wrap gap-2 text-xs">
+            <span class="px-2 py-1 bg-slate-900 text-white rounded">interface shrinks; helpers go private</span>
+            <span class="px-2 py-1 bg-slate-900 text-white rounded">consumers test with the real read</span>
+            <span class="px-2 py-1 bg-slate-900 text-white rounded">source-regex tests retire</span>
+          </div>
+          <div class="rounded-lg bg-stone-50 border border-stone-200 p-4 text-sm space-y-2">
+            <p class="schem text-slate-500">Tests · 40 files (7,974 LOC) → ~4 suites: windows &amp; prefetch · drill &amp; grain · stage compare · cache &amp; restore</p>
+            <ul class="space-y-1.5">
+              <li><b class="text-amber-700">Merge</b>: the 23 <span class="mono text-xs">useTableWidgetInfiniteScroll.*</span> files and the 17 <span class="mono text-xs">timeBuckets</span> tests. These cases are kept word for word:
+                <ul class="pl-4 list-disc">
+                  <li>"refuses to match an ambiguous identity…"</li>
+                  <li>"a later partial source cannot overwrite…"</li>
+                  <li>"does not evict a NEWER read…"</li>
+                  <li>the <span class="mono text-xs">omitBuckets</span> cases</li>
+                </ul>
+              </li>
+              <li><b class="text-red-700">Replaced</b>, each by a test at the new interface:
+                <ul class="pl-4 list-disc">
+                  <li><span class="mono text-xs">yearOnWire</span> (regex over the source) → an assertion on the request body the plan server recorded.</li>
+                  <li><span class="mono text-xs">queryIdentity</span> (memo identity) → "the same view issues no second read", checked by counting requests.</li>
+                  <li><span class="mono text-xs">bucketWindowComposeInvalidation</span> → "an invalidated window re-reads", driven through the interface.</li>
+                </ul>
+              </li>
+              <li><b class="text-emerald-700">Survive</b>: the 16 <span class="mono text-xs">useTableWidget.*</span> and 5 <span class="mono text-xs">TableWidget.*</span> files that stub the read path today. They switch to the real one.</li>
+            </ul>
+            <p><b>Mocks that go</b>:
+              </p><ul class="pl-4 list-disc">
+                <li>21 × <span class="mono">vi.mock("./useTableWidgetInfiniteScroll")</span>.</li>
+                <li>22 per-file <span class="mono">fetchPlanDataStreamProgressive</span> stubs.</li>
+                <li>22 <span class="mono">makeWidget</span> copies become one builder.</li>
+              </ul>
+            <p></p>
+          </div>
+        </article>
+
+        <!-- ===== 4 ===== -->
+        <article id="c4" class="rounded-2xl border border-stone-200 bg-white shadow-sm p-6 sm:p-8 space-y-6">
+          <header class="space-y-3">
+            <p class="schem text-slate-400">04</p>
+            <h3 class="font-serif text-2xl">Test the scenario rules editor as one module</h3>
+            <div class="flex flex-wrap gap-2 text-xs">
+              <span class="px-2 py-1 rounded-full bg-emerald-100 text-emerald-800 font-semibold">Strong</span>
+              <span class="px-2 py-1 rounded-full bg-slate-100 text-slate-700">ports &amp; adapters · seam exists</span>
+              <span class="px-2 py-1 rounded-full bg-stone-100 text-stone-700">13 test files → 2 suites</span>
+            </div>
+          </header>
+          <div class="mono text-xs text-slate-600 leading-relaxed">
+            components/settings/ (36 files · 7,433 LOC): ScenarioSettingsContent → ScenarioRulesList → ScenarioRuleItem → ScenarioRuleRow (843) → RuleInput → 10 fields · hooks/report/useScenarioSettings.ts (563 LOC · ~49 return fields) · useScenarioConfigQuery · utils/report/scenarioRuleHelpers.ts (1,279) · services/scenarioConfigApi.ts (467 · 11 exports)
+          </div>
+          <div class="grid md:grid-cols-2 gap-6">
+            <figure class="rounded-lg border border-stone-200 p-4 diagram">
+              <figcaption class="schem text-slate-500 mb-2">Before · each test substitutes the module below it</figcaption>
+              <pre class="mermaid" data-processed="true"><svg id="mermaid-0" width="100%" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" class="flowchart" style="max-width: 1017.68359375px;" viewBox="0 0 1017.68359375 503.01458740234375" role="graphics-document document" aria-roledescription="flowchart-v2"><style>#mermaid-0{font-family:"trebuchet ms",verdana,arial,sans-serif;font-size:16px;fill:#000000;}#mermaid-0 .error-icon{fill:#552222;}#mermaid-0 .error-text{fill:#552222;stroke:#552222;}#mermaid-0 .edge-thickness-normal{stroke-width:1px;}#mermaid-0 .edge-thickness-thick{stroke-width:3.5px;}#mermaid-0 .edge-pattern-solid{stroke-dasharray:0;}#mermaid-0 .edge-thickness-invisible{stroke-width:0;fill:none;}#mermaid-0 .edge-pattern-dashed{stroke-dasharray:3;}#mermaid-0 .edge-pattern-dotted{stroke-dasharray:2;}#mermaid-0 .marker{fill:#666;stroke:#666;}#mermaid-0 .marker.cross{stroke:#666;}#mermaid-0 svg{font-family:"trebuchet ms",verdana,arial,sans-serif;font-size:16px;}#mermaid-0 p{margin:0;}#mermaid-0 .label{font-family:"trebuchet ms",verdana,arial,sans-serif;color:#000000;}#mermaid-0 .cluster-label text{fill:#333;}#mermaid-0 .cluster-label span{color:#333;}#mermaid-0 .cluster-label span p{background-color:transparent;}#mermaid-0 .label text,#mermaid-0 span{fill:#000000;color:#000000;}#mermaid-0 .node rect,#mermaid-0 .node circle,#mermaid-0 .node ellipse,#mermaid-0 .node polygon,#mermaid-0 .node path{fill:#eee;stroke:#999;stroke-width:1px;}#mermaid-0 .rough-node .label text,#mermaid-0 .node .label text,#mermaid-0 .image-shape .label,#mermaid-0 .icon-shape .label{text-anchor:middle;}#mermaid-0 .node .katex path{fill:#000;stroke:#000;stroke-width:1px;}#mermaid-0 .rough-node .label,#mermaid-0 .node .label,#mermaid-0 .image-shape .label,#mermaid-0 .icon-shape .label{text-align:center;}#mermaid-0 .node.clickable{cursor:pointer;}#mermaid-0 .root .anchor path{fill:#666!important;stroke-width:0;stroke:#666;}#mermaid-0 .arrowheadPath{fill:#333333;}#mermaid-0 .edgePath .path{stroke:#666;stroke-width:2.0px;}#mermaid-0 .flowchart-link{stroke:#666;fill:none;}#mermaid-0 .edgeLabel{background-color:white;text-align:center;}#mermaid-0 .edgeLabel p{background-color:white;}#mermaid-0 .edgeLabel rect{opacity:0.5;background-color:white;fill:white;}#mermaid-0 .labelBkg{background-color:rgba(255, 255, 255, 0.5);}#mermaid-0 .cluster rect{fill:hsl(0, 0%, 98.9215686275%);stroke:#707070;stroke-width:1px;}#mermaid-0 .cluster text{fill:#333;}#mermaid-0 .cluster span{color:#333;}#mermaid-0 div.mermaidTooltip{position:absolute;text-align:center;max-width:200px;padding:2px;font-family:"trebuchet ms",verdana,arial,sans-serif;font-size:12px;background:hsl(-160, 0%, 93.3333333333%);border:1px solid #707070;border-radius:2px;pointer-events:none;z-index:100;}#mermaid-0 .flowchartTitleText{text-anchor:middle;font-size:18px;fill:#000000;}#mermaid-0 rect.text{fill:none;stroke-width:0;}#mermaid-0 .icon-shape,#mermaid-0 .image-shape{background-color:white;text-align:center;}#mermaid-0 .icon-shape p,#mermaid-0 .image-shape p{background-color:white;padding:2px;}#mermaid-0 .icon-shape rect,#mermaid-0 .image-shape rect{opacity:0.5;background-color:white;fill:white;}#mermaid-0 :root{--mermaid-font-family:"trebuchet ms",verdana,arial,sans-serif;}#mermaid-0 .t&gt;*{fill:#fef2f2!important;stroke:#dc2626!important;color:#7f1d1d!important;}#mermaid-0 .t span{fill:#fef2f2!important;stroke:#dc2626!important;color:#7f1d1d!important;}#mermaid-0 .t tspan{fill:#7f1d1d!important;}#mermaid-0 .ok&gt;*{fill:#ecfdf5!important;stroke:#059669!important;color:#065f46!important;}#mermaid-0 .ok span{fill:#ecfdf5!important;stroke:#059669!important;color:#065f46!important;}#mermaid-0 .ok tspan{fill:#065f46!important;}</style><g><marker id="mermaid-0_flowchart-v2-pointEnd" class="marker flowchart-v2" viewBox="0 0 10 10" refX="5" refY="5" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="8" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" class="arrowMarkerPath" style="stroke-width: 1; stroke-dasharray: 1, 0;"></path></marker><marker id="mermaid-0_flowchart-v2-pointStart" class="marker flowchart-v2" viewBox="0 0 10 10" refX="4.5" refY="5" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="8" orient="auto"><path d="M 0 5 L 10 10 L 10 0 z" class="arrowMarkerPath" style="stroke-width: 1; stroke-dasharray: 1, 0;"></path></marker><marker id="mermaid-0_flowchart-v2-circleEnd" class="marker flowchart-v2" viewBox="0 0 10 10" refX="11" refY="5" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto"><circle cx="5" cy="5" r="5" class="arrowMarkerPath" style="stroke-width: 1; stroke-dasharray: 1, 0;"></circle></marker><marker id="mermaid-0_flowchart-v2-circleStart" class="marker flowchart-v2" viewBox="0 0 10 10" refX="-1" refY="5" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto"><circle cx="5" cy="5" r="5" class="arrowMarkerPath" style="stroke-width: 1; stroke-dasharray: 1, 0;"></circle></marker><marker id="mermaid-0_flowchart-v2-crossEnd" class="marker cross flowchart-v2" viewBox="0 0 11 11" refX="12" refY="5.2" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto"><path d="M 1,1 l 9,9 M 10,1 l -9,9" class="arrowMarkerPath" style="stroke-width: 2; stroke-dasharray: 1, 0;"></path></marker><marker id="mermaid-0_flowchart-v2-crossStart" class="marker cross flowchart-v2" viewBox="0 0 11 11" refX="-1" refY="5.2" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto"><path d="M 1,1 l 9,9 M 10,1 l -9,9" class="arrowMarkerPath" style="stroke-width: 2; stroke-dasharray: 1, 0;"></path></marker><g class="root"><g class="clusters"></g><g class="edgePaths"><path d="M103.572,62L98.581,68.167C93.591,74.333,83.61,86.667,90.313,100.63C97.017,114.594,120.405,130.187,132.099,137.984L143.793,145.781" id="L_sb_C_sb_L_0" class=" edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style="" marker-end="url(#mermaid-0_flowchart-v2-pointEnd)"></path><path d="M187.617,202L187.617,210.167C187.617,218.333,187.617,234.667,187.617,248.333C187.617,262,187.617,273,187.617,278.5L187.617,284" id="L_sb_L_sb_R_1" class=" edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style="" marker-end="url(#mermaid-0_flowchart-v2-pointEnd)"></path><path d="M187.617,342L187.617,348.167C187.617,354.333,187.617,366.667,187.617,380.418C187.617,394.169,187.617,409.338,187.617,416.923L187.617,424.507" id="L_sb_R_sb_F_2" class=" edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style="" marker-end="url(#mermaid-0_flowchart-v2-pointEnd)"></path><path d="M230.698,62L254.742,68.167C278.787,74.333,326.876,86.667,358.447,98.595C390.018,110.523,405.071,122.046,412.598,127.807L420.125,133.569" id="L_sb_C_sb_H_3" class=" edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style="" marker-end="url(#mermaid-0_flowchart-v2-pointEnd)"></path><path d="M474.25,214L474.25,220.167C474.25,226.333,474.25,238.667,487.129,250.723C500.008,262.779,525.767,274.558,538.646,280.447L551.525,286.337" id="L_sb_H_sb_Q_4" class=" edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style="" marker-end="url(#mermaid-0_flowchart-v2-pointEnd)"></path><path d="M614.207,342L614.207,348.167C614.207,354.333,614.207,366.667,625.164,380.921C636.121,395.176,658.036,411.353,668.993,419.441L679.95,427.529" id="L_sb_Q_sb_A_5" class=" edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style="" marker-end="url(#mermaid-0_flowchart-v2-pointEnd)"></path><path d="M521.742,54.5L521.742,61.917C521.742,69.333,521.742,84.167,518.242,97.185C514.742,110.203,507.741,121.405,504.241,127.007L500.741,132.608" id="L_sb_T1_sb_H_6" class=" edge-thickness-normal edge-pattern-dotted edge-thickness-normal edge-pattern-solid flowchart-link" style=";stroke:#dc2626;stroke-width:2px;fill:none" marker-end="url(#mermaid-0_flowchart-v2-pointEnd)"></path><path d="M337.618,54.5L331.616,61.917C325.614,69.333,313.61,84.167,295.913,99.38C278.217,114.594,254.829,130.187,243.135,137.984L231.441,145.781" id="L_sb_T2_sb_L_7" class=" edge-thickness-normal edge-pattern-dotted edge-thickness-normal edge-pattern-solid flowchart-link" style=";stroke:#dc2626;stroke-width:2px;fill:none" marker-end="url(#mermaid-0_flowchart-v2-pointEnd)"></path><path d="M754.164,194.5L754.164,203.917C754.164,213.333,754.164,232.167,741.285,247.473C728.406,262.779,702.647,274.558,689.768,280.447L676.889,286.337" id="L_sb_T3_sb_Q_8" class=" edge-thickness-normal edge-pattern-dotted edge-thickness-normal edge-pattern-solid flowchart-link" style=";stroke:#dc2626;stroke-width:2px;fill:none" marker-end="url(#mermaid-0_flowchart-v2-pointEnd)"></path><path d="M895.098,334.5L895.098,341.917C895.098,349.333,895.098,364.167,884.141,379.671C873.183,395.176,851.269,411.353,840.312,419.441L829.355,427.529" id="L_sb_T4_sb_A_9" class=" edge-thickness-normal edge-pattern-dotted edge-thickness-normal edge-pattern-solid flowchart-link" style=";stroke:#059669;stroke-width:2px;fill:none" marker-end="url(#mermaid-0_flowchart-v2-pointEnd)"></path></g><g class="edgeLabels"><g class="edgeLabel"><g class="label" transform="translate(0, 0)"><foreignObject width="0" height="0"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel "></span></div></foreignObject></g></g><g class="edgeLabel"><g class="label" transform="translate(0, 0)"><foreignObject width="0" height="0"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel "></span></div></foreignObject></g></g><g class="edgeLabel"><g class="label" transform="translate(0, 0)"><foreignObject width="0" height="0"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel "></span></div></foreignObject></g></g><g class="edgeLabel"><g class="label" transform="translate(0, 0)"><foreignObject width="0" height="0"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel "></span></div></foreignObject></g></g><g class="edgeLabel"><g class="label" transform="translate(0, 0)"><foreignObject width="0" height="0"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel "></span></div></foreignObject></g></g><g class="edgeLabel"><g class="label" transform="translate(0, 0)"><foreignObject width="0" height="0"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel "></span></div></foreignObject></g></g><g class="edgeLabel" transform="translate(521.7421875, 99)"><g class="label" transform="translate(-18.4765625, -12)"><foreignObject width="36.953125" height="24"><div style="stroke: rgb(220, 38, 38); stroke-width: 2px; display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;" xmlns="http://www.w3.org/1999/xhtml" class="labelBkg"><span style=";stroke:#dc2626;stroke-width:2px;color:none" class="edgeLabel "><p>stubs</p></span></div></foreignObject></g></g><g class="edgeLabel" transform="translate(301.60546875, 99)"><g class="label" transform="translate(-53.359375, -12)"><foreignObject width="106.71875" height="24"><div style="stroke: rgb(220, 38, 38); stroke-width: 2px; display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;" xmlns="http://www.w3.org/1999/xhtml" class="labelBkg"><span style=";stroke:#dc2626;stroke-width:2px;color:none" class="edgeLabel "><p>fake controller</p></span></div></foreignObject></g></g><g class="edgeLabel" transform="translate(754.1640625, 251)"><g class="label" transform="translate(-18.4765625, -12)"><foreignObject width="36.953125" height="24"><div style="stroke: rgb(220, 38, 38); stroke-width: 2px; display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;" xmlns="http://www.w3.org/1999/xhtml" class="labelBkg"><span style=";stroke:#dc2626;stroke-width:2px;color:none" class="edgeLabel "><p>stubs</p></span></div></foreignObject></g></g><g class="edgeLabel" transform="translate(895.09765625, 379)"><g class="label" transform="translate(-18.796875, -12)"><foreignObject width="37.59375" height="24"><div style="stroke: rgb(5, 150, 105); stroke-width: 2px; display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;" xmlns="http://www.w3.org/1999/xhtml" class="labelBkg"><span style=";stroke:#059669;stroke-width:2px;color:none" class="edgeLabel "><p>fakes</p></span></div></foreignObject></g></g></g><g class="nodes"><g class="node default  " id="flowchart-sb_C-0" transform="translate(125.421875, 35)"><rect class="basic label-container" style="" x="-117.421875" y="-27" width="234.84375" height="54"></rect><g class="label" style="" transform="translate(-87.421875, -12)"><rect></rect><foreignObject width="174.84375" height="24"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel "><p>ScenarioSettingsContent</p></span></div></foreignObject></g></g><g class="node default  " id="flowchart-sb_L-1" transform="translate(187.6171875, 175)"><rect class="basic label-container" style="" x="-91.9296875" y="-27" width="183.859375" height="54"></rect><g class="label" style="" transform="translate(-61.9296875, -12)"><rect></rect><foreignObject width="123.859375" height="24"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel "><p>ScenarioRulesList</p></span></div></foreignObject></g></g><g class="node default  " id="flowchart-sb_R-3" transform="translate(187.6171875, 315)"><rect class="basic label-container" style="" x="-90.53125" y="-27" width="181.0625" height="54"></rect><g class="label" style="" transform="translate(-60.53125, -12)"><rect></rect><foreignObject width="121.0625" height="24"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel "><p>ScenarioRuleRow</p></span></div></foreignObject></g></g><g class="node default  " id="flowchart-sb_F-5" transform="translate(187.6171875, 455.50728607177734)"><rect class="basic label-container" style="" x="-103.59375" y="-27" width="207.1875" height="54"></rect><g class="label" style="" transform="translate(-73.59375, -12)"><rect></rect><foreignObject width="147.1875" height="24"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel "><p>RuleInput + 10 fields</p></span></div></foreignObject></g></g><g class="node default  " id="flowchart-sb_H-7" transform="translate(474.25, 175)"><rect class="basic label-container" style="" x="-130" y="-39" width="260" height="78"></rect><g class="label" style="" transform="translate(-100, -24)"><rect></rect><foreignObject width="200" height="48"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table; white-space: break-spaces; line-height: 1.5; max-width: 200px; text-align: center; width: 200px;"><span class="nodeLabel "><p>useScenarioSettings · 49 fields</p></span></div></foreignObject></g></g><g class="node default  " id="flowchart-sb_Q-9" transform="translate(614.20703125, 315)"><rect class="basic label-container" style="" x="-116.3046875" y="-27" width="232.609375" height="54"></rect><g class="label" style="" transform="translate(-86.3046875, -12)"><rect></rect><foreignObject width="172.609375" height="24"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel "><p>useScenarioConfigQuery</p></span></div></foreignObject></g></g><g class="node default  " id="flowchart-sb_A-11" transform="translate(754.65234375, 455.50728607177734)"><path d="M0,13.338192419825074 a71.484375,13.338192419825074 0,0,0 142.96875,0 a71.484375,13.338192419825074 0,0,0 -142.96875,0 l0,52.33819241982508 a71.484375,13.338192419825074 0,0,0 142.96875,0 l0,-52.33819241982508" class="basic label-container" style="" label-offset-y="13.338192419825074" transform="translate(-71.484375, -39.507288629737616)"></path><g class="label" style="" transform="translate(-63.984375, -2)"><rect></rect><foreignObject width="127.96875" height="24"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel "><p>scenarioConfigApi</p></span></div></foreignObject></g></g><g class="node default t " id="flowchart-sb_T1-12" transform="translate(521.7421875, 35)"><rect class="basic label-container" style="fill:#fef2f2 !important;stroke:#dc2626 !important" rx="19.5" ry="19.5" x="-57.7890625" y="-19.5" width="115.578125" height="39"></rect><g class="label" style="color:#7f1d1d !important" transform="translate(-45.4140625, -12)"><rect></rect><foreignObject width="90.828125" height="24"><div style="color: rgb(127, 29, 29) !important; display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;" xmlns="http://www.w3.org/1999/xhtml"><span style="color:#7f1d1d !important" class="nodeLabel "><p>Content.test</p></span></div></foreignObject></g></g><g class="node default t " id="flowchart-sb_T2-14" transform="translate(353.3984375, 35)"><rect class="basic label-container" style="fill:#fef2f2 !important;stroke:#dc2626 !important" rx="19.5" ry="19.5" x="-60.5546875" y="-19.5" width="121.109375" height="39"></rect><g class="label" style="color:#7f1d1d !important" transform="translate(-48.1796875, -12)"><rect></rect><foreignObject width="96.359375" height="24"><div style="color: rgb(127, 29, 29) !important; display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;" xmlns="http://www.w3.org/1999/xhtml"><span style="color:#7f1d1d !important" class="nodeLabel "><p>RulesList.* ×4</p></span></div></foreignObject></g></g><g class="node default t " id="flowchart-sb_T3-16" transform="translate(754.1640625, 175)"><rect class="basic label-container" style="fill:#fef2f2 !important;stroke:#dc2626 !important" rx="19.5" ry="19.5" x="-99.9140625" y="-19.5" width="199.828125" height="39"></rect><g class="label" style="color:#7f1d1d !important" transform="translate(-87.5390625, -12)"><rect></rect><foreignObject width="175.078125" height="24"><div style="color: rgb(127, 29, 29) !important; display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;" xmlns="http://www.w3.org/1999/xhtml"><span style="color:#7f1d1d !important" class="nodeLabel "><p>useScenarioSettings.* ×3</p></span></div></foreignObject></g></g><g class="node default ok " id="flowchart-sb_T4-18" transform="translate(895.09765625, 315)"><rect class="basic label-container" style="fill:#ecfdf5 !important;stroke:#059669 !important" rx="19.5" ry="19.5" x="-114.5859375" y="-19.5" width="229.171875" height="39"></rect><g class="label" style="color:#065f46 !important" transform="translate(-102.2109375, -12)"><rect></rect><foreignObject width="204.421875" height="24"><div style="color: rgb(6, 95, 70) !important; display: table; white-space: break-spaces; line-height: 1.5; max-width: 200px; text-align: center; width: 200px;" xmlns="http://www.w3.org/1999/xhtml"><span style="color:#065f46 !important" class="nodeLabel "><p>useScenarioConfigQuery.test</p></span></div></foreignObject></g></g></g></g></g></svg></pre>
+            </figure>
+            <figure class="rounded-lg border border-stone-200 p-4 diagram">
+              <figcaption class="schem text-slate-500 mb-2">After · one suite crosses the real seam</figcaption>
+              <pre class="mermaid" data-processed="true"><svg id="mermaid-1" width="100%" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" class="flowchart" style="max-width: 564.375px;" viewBox="0 0 564.375 625.426513671875" role="graphics-document document" aria-roledescription="flowchart-v2"><style>#mermaid-1{font-family:"trebuchet ms",verdana,arial,sans-serif;font-size:16px;fill:#000000;}#mermaid-1 .error-icon{fill:#552222;}#mermaid-1 .error-text{fill:#552222;stroke:#552222;}#mermaid-1 .edge-thickness-normal{stroke-width:1px;}#mermaid-1 .edge-thickness-thick{stroke-width:3.5px;}#mermaid-1 .edge-pattern-solid{stroke-dasharray:0;}#mermaid-1 .edge-thickness-invisible{stroke-width:0;fill:none;}#mermaid-1 .edge-pattern-dashed{stroke-dasharray:3;}#mermaid-1 .edge-pattern-dotted{stroke-dasharray:2;}#mermaid-1 .marker{fill:#666;stroke:#666;}#mermaid-1 .marker.cross{stroke:#666;}#mermaid-1 svg{font-family:"trebuchet ms",verdana,arial,sans-serif;font-size:16px;}#mermaid-1 p{margin:0;}#mermaid-1 .label{font-family:"trebuchet ms",verdana,arial,sans-serif;color:#000000;}#mermaid-1 .cluster-label text{fill:#333;}#mermaid-1 .cluster-label span{color:#333;}#mermaid-1 .cluster-label span p{background-color:transparent;}#mermaid-1 .label text,#mermaid-1 span{fill:#000000;color:#000000;}#mermaid-1 .node rect,#mermaid-1 .node circle,#mermaid-1 .node ellipse,#mermaid-1 .node polygon,#mermaid-1 .node path{fill:#eee;stroke:#999;stroke-width:1px;}#mermaid-1 .rough-node .label text,#mermaid-1 .node .label text,#mermaid-1 .image-shape .label,#mermaid-1 .icon-shape .label{text-anchor:middle;}#mermaid-1 .node .katex path{fill:#000;stroke:#000;stroke-width:1px;}#mermaid-1 .rough-node .label,#mermaid-1 .node .label,#mermaid-1 .image-shape .label,#mermaid-1 .icon-shape .label{text-align:center;}#mermaid-1 .node.clickable{cursor:pointer;}#mermaid-1 .root .anchor path{fill:#666!important;stroke-width:0;stroke:#666;}#mermaid-1 .arrowheadPath{fill:#333333;}#mermaid-1 .edgePath .path{stroke:#666;stroke-width:2.0px;}#mermaid-1 .flowchart-link{stroke:#666;fill:none;}#mermaid-1 .edgeLabel{background-color:white;text-align:center;}#mermaid-1 .edgeLabel p{background-color:white;}#mermaid-1 .edgeLabel rect{opacity:0.5;background-color:white;fill:white;}#mermaid-1 .labelBkg{background-color:rgba(255, 255, 255, 0.5);}#mermaid-1 .cluster rect{fill:hsl(0, 0%, 98.9215686275%);stroke:#707070;stroke-width:1px;}#mermaid-1 .cluster text{fill:#333;}#mermaid-1 .cluster span{color:#333;}#mermaid-1 div.mermaidTooltip{position:absolute;text-align:center;max-width:200px;padding:2px;font-family:"trebuchet ms",verdana,arial,sans-serif;font-size:12px;background:hsl(-160, 0%, 93.3333333333%);border:1px solid #707070;border-radius:2px;pointer-events:none;z-index:100;}#mermaid-1 .flowchartTitleText{text-anchor:middle;font-size:18px;fill:#000000;}#mermaid-1 rect.text{fill:none;stroke-width:0;}#mermaid-1 .icon-shape,#mermaid-1 .image-shape{background-color:white;text-align:center;}#mermaid-1 .icon-shape p,#mermaid-1 .image-shape p{background-color:white;padding:2px;}#mermaid-1 .icon-shape rect,#mermaid-1 .image-shape rect{opacity:0.5;background-color:white;fill:white;}#mermaid-1 :root{--mermaid-font-family:"trebuchet ms",verdana,arial,sans-serif;}#mermaid-1 .faded&gt;*{fill:#334155!important;stroke:#475569!important;color:#cbd5e1!important;}#mermaid-1 .faded span{fill:#334155!important;stroke:#475569!important;color:#cbd5e1!important;}#mermaid-1 .faded tspan{fill:#cbd5e1!important;}#mermaid-1 .ok&gt;*{fill:#ecfdf5!important;stroke:#059669!important;color:#065f46!important;}#mermaid-1 .ok span{fill:#ecfdf5!important;stroke:#059669!important;color:#065f46!important;}#mermaid-1 .ok tspan{fill:#065f46!important;}</style><g><marker id="mermaid-1_flowchart-v2-pointEnd" class="marker flowchart-v2" viewBox="0 0 10 10" refX="5" refY="5" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="8" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" class="arrowMarkerPath" style="stroke-width: 1; stroke-dasharray: 1, 0;"></path></marker><marker id="mermaid-1_flowchart-v2-pointStart" class="marker flowchart-v2" viewBox="0 0 10 10" refX="4.5" refY="5" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="8" orient="auto"><path d="M 0 5 L 10 10 L 10 0 z" class="arrowMarkerPath" style="stroke-width: 1; stroke-dasharray: 1, 0;"></path></marker><marker id="mermaid-1_flowchart-v2-circleEnd" class="marker flowchart-v2" viewBox="0 0 10 10" refX="11" refY="5" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto"><circle cx="5" cy="5" r="5" class="arrowMarkerPath" style="stroke-width: 1; stroke-dasharray: 1, 0;"></circle></marker><marker id="mermaid-1_flowchart-v2-circleStart" class="marker flowchart-v2" viewBox="0 0 10 10" refX="-1" refY="5" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto"><circle cx="5" cy="5" r="5" class="arrowMarkerPath" style="stroke-width: 1; stroke-dasharray: 1, 0;"></circle></marker><marker id="mermaid-1_flowchart-v2-crossEnd" class="marker cross flowchart-v2" viewBox="0 0 11 11" refX="12" refY="5.2" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto"><path d="M 1,1 l 9,9 M 10,1 l -9,9" class="arrowMarkerPath" style="stroke-width: 2; stroke-dasharray: 1, 0;"></path></marker><marker id="mermaid-1_flowchart-v2-crossStart" class="marker cross flowchart-v2" viewBox="0 0 11 11" refX="-1" refY="5.2" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto"><path d="M 1,1 l 9,9 M 10,1 l -9,9" class="arrowMarkerPath" style="stroke-width: 2; stroke-dasharray: 1, 0;"></path></marker><g class="root"><g class="clusters"><g class="cluster " id="sa_deep" data-look="classic"><rect style="fill:#0f172a !important;stroke:#0f172a !important" x="8" y="121" width="548.375" height="312"></rect><g class="cluster-label " transform="translate(208.4296875, 121)"><foreignObject width="147.515625" height="24"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel " style="color:#e2e8f0 !important"><p>scenario rules editor</p></span></div></foreignObject></g></g></g><g class="edgePaths"><path d="M276.094,71L276.094,75.167C276.094,79.333,276.094,87.667,276.094,96C276.094,104.333,276.094,112.667,276.094,120.333C276.094,128,276.094,135,276.094,138.5L276.094,142" id="L_sa_T_sa_C_0" class=" edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style="" marker-end="url(#mermaid-1_flowchart-v2-pointEnd)"></path><path d="M209.415,200L199.125,204.167C188.835,208.333,168.256,216.667,157.966,224.333C147.676,232,147.676,239,147.676,242.5L147.676,246" id="L_sa_C_sa_L_1" class=" edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style="" marker-end="url(#mermaid-1_flowchart-v2-pointEnd)"></path><path d="M147.676,304L147.676,308.167C147.676,312.333,147.676,320.667,147.676,328.333C147.676,336,147.676,343,147.676,346.5L147.676,350" id="L_sa_L_sa_R_2" class=" edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style="" marker-end="url(#mermaid-1_flowchart-v2-pointEnd)"></path><path d="M342.772,200L353.062,204.167C363.352,208.333,383.932,216.667,394.222,224.333C404.512,232,404.512,239,404.512,242.5L404.512,246" id="L_sa_C_sa_H_3" class=" edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style="" marker-end="url(#mermaid-1_flowchart-v2-pointEnd)"></path><path d="M404.512,304L404.512,308.167C404.512,312.333,404.512,320.667,404.512,328.333C404.512,336,404.512,343,404.512,346.5L404.512,350" id="L_sa_H_sa_Q_4" class=" edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style="" marker-end="url(#mermaid-1_flowchart-v2-pointEnd)"></path><path d="M404.512,408L404.512,412.167C404.512,416.333,404.512,424.667,404.512,435C404.512,445.333,404.512,457.667,404.512,469.333C404.512,481,404.512,492,404.512,497.5L404.512,503" id="L_sa_Q_sa_A_5" class=" edge-thickness-normal edge-pattern-dotted edge-thickness-normal edge-pattern-solid flowchart-link" style="" marker-end="url(#mermaid-1_flowchart-v2-pointEnd)"></path></g><g class="edgeLabels"><g class="edgeLabel"><g class="label" transform="translate(0, 0)"><foreignObject width="0" height="0"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel "></span></div></foreignObject></g></g><g class="edgeLabel"><g class="label" transform="translate(0, 0)"><foreignObject width="0" height="0"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel "></span></div></foreignObject></g></g><g class="edgeLabel"><g class="label" transform="translate(0, 0)"><foreignObject width="0" height="0"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel "></span></div></foreignObject></g></g><g class="edgeLabel"><g class="label" transform="translate(0, 0)"><foreignObject width="0" height="0"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel "></span></div></foreignObject></g></g><g class="edgeLabel"><g class="label" transform="translate(0, 0)"><foreignObject width="0" height="0"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel "></span></div></foreignObject></g></g><g class="edgeLabel" transform="translate(404.51171875, 470)"><g class="label" transform="translate(-18.4453125, -12)"><foreignObject width="36.890625" height="24"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel "><p>seam</p></span></div></foreignObject></g></g></g><g class="nodes"><g class="node default ok " id="flowchart-sa_T-20" transform="translate(276.09375, 39.5)"><rect class="basic label-container" style="fill:#ecfdf5 !important;stroke:#059669 !important" rx="31.5" ry="31.5" x="-115.375" y="-31.5" width="230.75" height="63"></rect><g class="label" style="color:#065f46 !important" transform="translate(-100, -24)"><rect></rect><foreignObject width="200" height="48"><div style="color: rgb(6, 95, 70) !important; display: table; white-space: break-spaces; line-height: 1.5; max-width: 200px; text-align: center; width: 200px;" xmlns="http://www.w3.org/1999/xhtml"><span style="color:#065f46 !important" class="nodeLabel "><p>editor suite: load → edit → save → assert payload</p></span></div></foreignObject></g></g><g class="node default faded " id="flowchart-sa_C-21" transform="translate(276.09375, 173)"><rect class="basic label-container" style="fill:#334155 !important;stroke:#475569 !important" x="-117.421875" y="-27" width="234.84375" height="54"></rect><g class="label" style="color:#cbd5e1 !important" transform="translate(-87.421875, -12)"><rect></rect><foreignObject width="174.84375" height="24"><div style="color: rgb(203, 213, 225) !important; display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;" xmlns="http://www.w3.org/1999/xhtml"><span style="color:#cbd5e1 !important" class="nodeLabel "><p>ScenarioSettingsContent</p></span></div></foreignObject></g></g><g class="node default faded " id="flowchart-sa_L-23" transform="translate(147.67578125, 277)"><rect class="basic label-container" style="fill:#334155 !important;stroke:#475569 !important" x="-91.9296875" y="-27" width="183.859375" height="54"></rect><g class="label" style="color:#cbd5e1 !important" transform="translate(-61.9296875, -12)"><rect></rect><foreignObject width="123.859375" height="24"><div style="color: rgb(203, 213, 225) !important; display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;" xmlns="http://www.w3.org/1999/xhtml"><span style="color:#cbd5e1 !important" class="nodeLabel "><p>ScenarioRulesList</p></span></div></foreignObject></g></g><g class="node default faded " id="flowchart-sa_R-24" transform="translate(147.67578125, 381)"><rect class="basic label-container" style="fill:#334155 !important;stroke:#475569 !important" x="-90.53125" y="-27" width="181.0625" height="54"></rect><g class="label" style="color:#cbd5e1 !important" transform="translate(-60.53125, -12)"><rect></rect><foreignObject width="121.0625" height="24"><div style="color: rgb(203, 213, 225) !important; display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;" xmlns="http://www.w3.org/1999/xhtml"><span style="color:#cbd5e1 !important" class="nodeLabel "><p>ScenarioRuleRow</p></span></div></foreignObject></g></g><g class="node default faded " id="flowchart-sa_H-26" transform="translate(404.51171875, 277)"><rect class="basic label-container" style="fill:#334155 !important;stroke:#475569 !important" x="-100.8671875" y="-27" width="201.734375" height="54"></rect><g class="label" style="color:#cbd5e1 !important" transform="translate(-70.8671875, -12)"><rect></rect><foreignObject width="141.734375" height="24"><div style="color: rgb(203, 213, 225) !important; display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;" xmlns="http://www.w3.org/1999/xhtml"><span style="color:#cbd5e1 !important" class="nodeLabel "><p>useScenarioSettings</p></span></div></foreignObject></g></g><g class="node default faded " id="flowchart-sa_Q-27" transform="translate(404.51171875, 381)"><rect class="basic label-container" style="fill:#334155 !important;stroke:#475569 !important" x="-116.3046875" y="-27" width="232.609375" height="54"></rect><g class="label" style="color:#cbd5e1 !important" transform="translate(-86.3046875, -12)"><rect></rect><foreignObject width="172.609375" height="24"><div style="color: rgb(203, 213, 225) !important; display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;" xmlns="http://www.w3.org/1999/xhtml"><span style="color:#cbd5e1 !important" class="nodeLabel "><p>useScenarioConfigQuery</p></span></div></foreignObject></g></g><g class="node default  " id="flowchart-sa_A-29" transform="translate(404.51171875, 562.2132377624512)"><path d="M0,15.808823529411764 a107.5,15.808823529411764 0,0,0 215,0 a107.5,15.808823529411764 0,0,0 -215,0 l0,78.80882352941177 a107.5,15.808823529411764 0,0,0 215,0 l0,-78.80882352941177" class="basic label-container" style="" label-offset-y="15.808823529411764" transform="translate(-107.5, -55.21323529411765)"></path><g class="label" style="" transform="translate(-100, -14)"><rect></rect><foreignObject width="200" height="48"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table; white-space: break-spaces; line-height: 1.5; max-width: 200px; text-align: center; width: 200px;"><span class="nodeLabel "><p>fake scenarioConfigApi + attribute *Api</p></span></div></foreignObject></g></g></g></g></g></svg></pre>
+            </figure>
+          </div>
+          <dl class="grid sm:grid-cols-[110px_1fr] gap-x-4 gap-y-2 text-sm">
+            <dt class="schem text-slate-500 pt-0.5">Problem</dt><dd>Editing a scenario's override rules is a single concept, but it is tested one module at a time, and each test substitutes the module beneath it. Only 1 test fakes the real seam, <span class="mono">scenarioConfigApi</span>, so no test follows a rule from loading through to the payload that gets saved.</dd>
+            <dt class="schem text-slate-500 pt-0.5">Solution</dt><dd>Render ScenarioSettingsContent with a real QueryClient and fake only <span class="mono">scenarioConfigApi</span> and the attribute <span class="mono">*Api</span> modules. Each test loads, edits, saves and asserts on the payload.</dd>
+          </dl>
+          <div class="flex flex-wrap gap-2 text-xs">
+            <span class="px-2 py-1 bg-slate-900 text-white rounded">seam moves to scenarioConfigApi</span>
+            <span class="px-2 py-1 bg-slate-900 text-white rounded">save payload is the assertion</span>
+            <span class="px-2 py-1 bg-slate-900 text-white rounded">controller fakes stop drifting</span>
+          </div>
+          <div class="rounded-lg bg-stone-50 border border-stone-200 p-4 text-sm space-y-2">
+            <p class="schem text-slate-500">Tests · 13 files (3,421 LOC) → 2 suites · 19 others unchanged</p>
+            <ul class="space-y-1.5">
+              <li><b class="text-amber-700">Merge</b> into the <i>editor suite</i> (10 files): <span class="mono text-xs">ScenarioRulesList.{crossContext, sizeClass, sumSplit, visibility}, ScenarioRuleRow, ScenarioRuleRow.sumSplit, ScenarioSettingsContent, useScenarioSettings.{departmentScope, productScope, revert}</span></li>
+              <li><b class="text-amber-700">Merge</b> 3 → 1 as the <i>rule semantics</i> suite: <span class="mono text-xs">scenarioRuleHelpers.test, .departmentScope, .sumSplit</span>. This is pure classification logic (<span class="mono text-xs">classifyObjectRule</span>, <span class="mono text-xs">sizeClassOf</span>) that deserves a suite of its own.</li>
+              <li><b class="text-emerald-700">Survive</b>:
+                <ul class="pl-4 list-disc">
+                  <li>Field inputs and a11y: <span class="mono text-xs">NumberField ×2, RuleMixEditor ×2, RuleInput, RuleMixInput, RuleObjectInput, SeasonAttributeField, PlanningAttributesField.lookup, ruleForms, productScope/* ×5</span>.</li>
+                  <li><span class="mono text-xs">useScenarioConfigQuery</span>, which already sits at the seam, and <span class="mono text-xs">useScenarioSaveFlow</span>.</li>
+                </ul>
+              </li>
+            </ul>
+            <p><b>Mocks that go</b>:
+              </p><ul class="pl-4 list-disc">
+                <li>The <span class="mono">useScenarioSettings</span> mock and 5 attribute-hook mocks in Content.test.</li>
+                <li>3 × <span class="mono">./useScenarioConfigQuery</span>.</li>
+                <li>3 in crossContext.</li>
+                <li>4 hand-built 49-field controllers.</li>
+              </ul>
+            <p></p>
+          </div>
+        </article>
+
+        <!-- ===== 5 ===== -->
+        <article id="c5" class="rounded-2xl border border-stone-200 bg-white shadow-sm p-6 sm:p-8 space-y-6">
+          <header class="space-y-3">
+            <p class="schem text-slate-400">05</p>
+            <h3 class="font-serif text-2xl">Narrow the edit session's interface to the grid</h3>
+            <div class="flex flex-wrap gap-2 text-xs">
+              <span class="px-2 py-1 rounded-full bg-amber-100 text-amber-800 font-semibold">Worth exploring</span>
+              <span class="px-2 py-1 rounded-full bg-slate-100 text-slate-700">in-process · needs #2</span>
+              <span class="px-2 py-1 rounded-full bg-stone-100 text-stone-700">17 → ~5 · +1 edit→repaint suite</span>
+            </div>
+          </header>
+          <div class="mono text-xs text-slate-600 leading-relaxed">
+            table/hooks/useTableEditState.ts (4,308 LOC) · table/context/TableEditContext.tsx (847 LOC · 97-field value) · hooks/report/usePlanEditSession.ts · ReportDashboard.tsx:989 · DashboardWidgetArea.tsx:102
+          </div>
+          <div class="grid md:grid-cols-2 gap-6">
+            <figure class="rounded-lg border border-stone-200 p-4 diagram space-y-2 text-xs">
+              <figcaption class="schem text-slate-500">Before · a 97-field context plus a cache side channel</figcaption>
+              <div class="flex gap-2 items-center"><div class="border border-slate-400 rounded px-2 py-1">ReportDashboard</div>→<div class="border border-slate-400 rounded px-2 py-1">usePlanEditSession</div>→<div class="border-2 border-slate-700 rounded px-2 py-1 font-semibold">useTableEditState</div></div>
+              <div class="h-16 bg-red-50 border-2 border-red-300 rounded flex items-center justify-center text-red-800 font-semibold">TableEditContext · 97 fields</div>
+              <div class="grid grid-cols-3 gap-2"><div class="border border-slate-300 rounded px-2 py-2 text-center">EditableCell</div><div class="border border-slate-300 rounded px-2 py-2 text-center">row labels</div><div class="border border-slate-300 rounded px-2 py-2 text-center">toolbar</div></div>
+              <div class="border border-dashed border-red-500 rounded p-2 text-red-700">side channel: query-cache patches → useTableWidget. Tests seed that cache by hand 32 times.</div>
+              <div class="rounded bg-red-50 border border-red-200 p-2 text-red-800">34 test files hand-build a partial <span class="mono">TableEditContextValue</span> · 14 copy the chain-preview stub · 12 probe the default context</div>
+            </figure>
+            <figure class="rounded-lg border border-stone-200 p-4 diagram space-y-2 text-xs">
+              <figcaption class="schem text-slate-500">After · cells see a narrow interface; the side channel goes inside</figcaption>
+              <div class="deep rounded p-3 text-slate-100 space-y-1">
+                <div class="schem text-slate-400">edit session</div>
+                <div class="text-slate-400">useTableEditState · coalescing · cache patching · undo carriers</div>
+              </div>
+              <div class="h-10 bg-white border-[3px] border-slate-900 rounded flex items-center justify-center mono">cell(id) → {value, state, reason} · commit(id, v)</div>
+              <div class="grid grid-cols-3 gap-2"><div class="border border-slate-300 rounded px-2 py-2 text-center">EditableCell</div><div class="border border-slate-300 rounded px-2 py-2 text-center">row labels</div><div class="border border-slate-300 rounded px-2 py-2 text-center">toolbar</div></div>
+              <svg viewBox="0 0 400 18" class="w-full"><line x1="0" y1="9" x2="400" y2="9" stroke="#0f172a" stroke-width="2" class="seam"></line></svg>
+              <div class="rounded bg-emerald-50 border border-emerald-300 p-2 text-emerald-900">New suite: mount TableWidget with a real edit session against the plan server · type a value → persisted → the grid repaints</div>
+            </figure>
+          </div>
+          <dl class="grid sm:grid-cols-[110px_1fr] gap-x-4 gap-y-2 text-sm">
+            <dt class="schem text-slate-500 pt-0.5">Problem</dt><dd>The edit session lives in ReportDashboard. It reaches the cells through a 97-field context and by patching the query cache, so no test can make an edit and then watch the grid repaint.</dd>
+            <dt class="schem text-slate-500 pt-0.5">Solution</dt><dd>Narrow what the grid takes from the edit session to per-cell state plus <span class="mono">commit</span>, then test "edit → persisted → repaint" at TableWidget.</dd>
+            <dt class="schem text-slate-500 pt-0.5">Evidence</dt><dd><ul class="list-disc pl-4 space-y-0.5">
+              <li><span class="mono">0d0fd0af</span>: "The function was covered against a real cache; the call's ARGUMENTS were not."</li>
+              <li>The base suite holds 141 tests, has been changed in 76 commits, and makes 18 <span class="mono">vi.spyOn</span> calls on QueryClient internals.</li>
+              <li><span class="mono">./planEditCoalescing</span> is mocked in 8 files just to shrink two timing constants (800 ms and 3,000 ms).</li></ul></dd>
+            <dt class="schem text-slate-500 pt-0.5">Why not Strong</dt><dd>Every cell reads this context, which makes it the riskiest change in the report.</dd>
+          </dl>
+          <div class="flex flex-wrap gap-2 text-xs">
+            <span class="px-2 py-1 bg-slate-900 text-white rounded">interface 97 → ~5 fields</span>
+            <span class="px-2 py-1 bg-slate-900 text-white rounded">cache patching gains locality</span>
+            <span class="px-2 py-1 bg-slate-900 text-white rounded">edit and repaint tested together</span>
+          </div>
+          <div class="rounded-lg bg-stone-50 border border-stone-200 p-4 text-sm space-y-2">
+            <p class="schem text-slate-500">Tests · useTableEditState.* 17 → ~5 · +1 TableWidget suite</p>
+            <ul class="space-y-1.5">
+              <li><b class="text-emerald-700">Survive</b>:
+                <ul class="pl-4 list-disc">
+                  <li><span class="mono text-xs">adjustments</span> and <span class="mono text-xs">narration</span>, which already run real SSE through the parser into EditableCell.</li>
+                  <li><span class="mono text-xs">sessionIdentity</span>: two edits before the first <span class="mono text-xs">persisted</span>.</li>
+                  <li><span class="mono text-xs">coalescing</span>, with timing passed in rather than mocked.</li>
+                  <li>The base file, trimmed to the session's own behaviour.</li>
+                </ul>
+              </li>
+              <li><b class="text-amber-700">Merge</b> into the new <i>edit → repaint</i> suite: <span class="mono text-xs">pastePaint, groupOnlyRefresh, widgetTotals, cascadePending, prefetchGate</span>. Today these assert on cache patches; afterwards they assert on the cells that repaint.</li>
+              <li><b class="text-red-700">Replaced</b>: <span class="mono text-xs">staleAfterDurableEdit</span>, which only asserts the arguments passed to a mocked sibling → "a durable edit marks the grid stale" in the repaint suite.</li>
+              <li><b class="text-sky-700">New</b>: one typed fake of the narrow interface. It replaces 34 partial-context casts.</li>
+            </ul>
+            <p><b>Mocks that go</b>:
+              </p><ul class="pl-4 list-disc">
+                <li>8 × <span class="mono">./planEditCoalescing</span>.</li>
+                <li><span class="mono">./staleAfterDurableEdit</span>.</li>
+                <li>14 planEditApi stub blocks (via #2).</li>
+                <li>32 hand <span class="mono">setQueryData</span> seeds.</li>
+              </ul>
+            <p></p>
+          </div>
+        </article>
+
+        <!-- ===== 6 ===== -->
+        <article id="c6" class="rounded-2xl border border-stone-200 bg-white shadow-sm p-6 sm:p-8 space-y-6">
+          <header class="space-y-3">
+            <p class="schem text-slate-400">06</p>
+            <h3 class="font-serif text-2xl">Treat paste and copy as two modules</h3>
+            <div class="flex flex-wrap gap-2 text-xs">
+              <span class="px-2 py-1 rounded-full bg-amber-100 text-amber-800 font-semibold">Worth exploring</span>
+              <span class="px-2 py-1 rounded-full bg-slate-100 text-slate-700">in-process</span>
+              <span class="px-2 py-1 rounded-full bg-stone-100 text-stone-700">16 test files → 4</span>
+            </div>
+          </header>
+          <div class="mono text-xs text-slate-600 leading-relaxed">table/clipboard/ (18 sources · 16 test files · 4,964 test LOC) · usePasteController (planPaste) · useMfpPasteAdapter · mfpPasteCells · pasteTarget · pasteSummary · parseClipboard · copySelection · selectionShape · serialise · writeClipboard</div>
+          <div class="grid md:grid-cols-2 gap-6">
+            <figure class="rounded-lg border border-stone-200 p-4 diagram text-xs space-y-3">
+              <figcaption class="schem text-slate-500">Before · 14 helper tests next to 2 tests that already cover the whole module</figcaption>
+              <div class="flex flex-wrap gap-1.5">
+                <span class="border border-slate-300 rounded px-1.5 py-0.5"><span class="chip-t">T</span> planPaste · 55 calls → 1 site</span>
+                <span class="border border-slate-300 rounded px-1.5 py-0.5"><span class="chip-t">T</span> toBatchEditCells · 22 → 1</span>
+                <span class="border border-slate-300 rounded px-1.5 py-0.5"><span class="chip-t">T</span> buildMfpPasteRows · 18 → 1</span>
+                <span class="border border-slate-300 rounded px-1.5 py-0.5"><span class="chip-t">T</span> pasteTarget</span>
+                <span class="border border-slate-300 rounded px-1.5 py-0.5"><span class="chip-t">T</span> pasteSummary</span>
+                <span class="border border-slate-300 rounded px-1.5 py-0.5"><span class="chip-t">T</span> pasteSummary.planning</span>
+                <span class="border border-slate-300 rounded px-1.5 py-0.5"><span class="chip-t">T</span> parseClipboard</span>
+                <span class="border border-slate-300 rounded px-1.5 py-0.5"><span class="chip-t">T</span> copySelection</span>
+                <span class="border border-slate-300 rounded px-1.5 py-0.5"><span class="chip-t">T</span> selectionShape</span>
+                <span class="border border-slate-300 rounded px-1.5 py-0.5"><span class="chip-t">T</span> serialise</span>
+                <span class="border border-slate-300 rounded px-1.5 py-0.5"><span class="chip-t">T</span> writeClipboard</span>
+                <span class="border border-slate-300 rounded px-1.5 py-0.5"><span class="chip-t">T</span> gridCopy.planGrid</span>
+              </div>
+              <div class="grid grid-cols-2 gap-2">
+                <div class="rounded border-2 border-emerald-600 bg-emerald-50 p-2"><b>gridPaste.integration</b><br>1 mock · real provider, surface, ⌘V</div>
+                <div class="rounded border-2 border-emerald-600 bg-emerald-50 p-2"><b>gridCopy.integration</b><br>0 mocks</div>
+              </div>
+            </figure>
+            <figure class="rounded-lg border border-stone-200 p-4 diagram text-xs space-y-3">
+              <figcaption class="schem text-slate-500">After · the integration tests' surface is the interface</figcaption>
+              <div class="grid grid-cols-2 gap-3">
+                <div class="deep rounded p-3 text-slate-100 h-52 flex flex-col justify-between"><div><div class="schem text-slate-400">paste</div><div class="text-slate-500 mt-2 leading-5">parse · target · expand · cap · summary · batch cells</div></div><div class="flex items-center gap-2"><span class="chip-t">T</span>1 suite</div></div>
+                <div class="deep rounded p-3 text-slate-100 h-52 flex flex-col justify-between"><div><div class="schem text-slate-400">copy</div><div class="text-slate-500 mt-2 leading-5">selection shape · serialise · write</div></div><div class="flex items-center gap-2"><span class="chip-t">T</span>1 suite</div></div>
+              </div>
+              <div class="text-slate-500">GridClipboardMenu and gridShortcutScope stay as they are.</div>
+            </figure>
+          </div>
+          <dl class="grid sm:grid-cols-[110px_1fr] gap-x-4 gap-y-2 text-sm">
+            <dt class="schem text-slate-500 pt-0.5">Problem</dt><dd>The paste logic lives in helpers that each have one caller and their own test file, even though two integration tests already drive the whole thing through the real surface.</dd>
+            <dt class="schem text-slate-500 pt-0.5">Solution</dt><dd>Treat the integration tests' surface as the interface for paste and for copy, and fold the helper tests into those two suites.</dd>
+            <dt class="schem text-slate-500 pt-0.5">Why not Strong</dt><dd>There are only 3 mocks here today, so the gain is fewer files, not fewer mocks.</dd>
+          </dl>
+          <div class="flex flex-wrap gap-2 text-xs">
+            <span class="px-2 py-1 bg-slate-900 text-white rounded">the template already exists</span>
+            <span class="px-2 py-1 bg-slate-900 text-white rounded">helpers become internal seams</span>
+          </div>
+          <div class="rounded-lg bg-stone-50 border border-stone-200 p-4 text-sm space-y-2">
+            <p class="schem text-slate-500">Tests · 16 → 4</p>
+            <ul class="space-y-1.5">
+              <li><b class="text-amber-700">Merge</b> into <span class="mono text-xs">gridPaste.integration</span>: <span class="mono text-xs">usePasteController, useMfpPasteAdapter, mfpPasteCells, pasteTarget, pasteSummary, pasteSummary.planning, parseClipboard</span>. Keep "counts the cap on the EXPANDED write set" and "never tiles a cmd-click set".</li>
+              <li><b class="text-amber-700">Merge</b> into <span class="mono text-xs">gridCopy.integration</span>: <span class="mono text-xs">copySelection, selectionShape, serialise, writeClipboard, gridCopy.planGrid</span>.</li>
+              <li><b class="text-emerald-700">Survive</b>: <span class="mono text-xs">GridClipboardMenu, gridShortcutScope</span>.</li>
+            </ul>
+            <p><b>Mocks that go</b>: the 2 in <span class="mono">usePasteController.test</span>. <span class="mono">sonner</span> stays.</p>
+          </div>
+        </article>
+
+        <!-- ===== 7 ===== -->
+        <article id="c7" class="rounded-2xl border border-stone-200 bg-white shadow-sm p-6 sm:p-8 space-y-6">
+          <header class="space-y-3">
+            <p class="schem text-slate-400">07</p>
+            <h3 class="font-serif text-2xl">Fold the one-adapter widget data loader</h3>
+            <div class="flex flex-wrap gap-2 text-xs">
+              <span class="px-2 py-1 rounded-full bg-amber-100 text-amber-800 font-semibold">Worth exploring</span>
+              <span class="px-2 py-1 rounded-full bg-slate-100 text-slate-700">ports &amp; adapters · needs #2</span>
+              <span class="px-2 py-1 rounded-full bg-stone-100 text-stone-700">8 test files → 3</span>
+            </div>
+          </header>
+          <div class="mono text-xs text-slate-600 leading-relaxed">widgets/shared/hooks/useWidgetData.ts (1,485 LOC · 16 in · 22 out · 1 production caller) · table/data/widgetDataLoader.ts (188 LOC · CHART only · 1 caller) · hooks/report/useReportDashboard.tsx:345</div>
+          <div class="grid md:grid-cols-2 gap-6">
+            <figure class="rounded-lg border border-stone-200 p-4 diagram">
+              <figcaption class="schem text-slate-500 mb-2">Before · a hypothetical seam that tests have to stub</figcaption>
+              <pre class="mermaid" data-processed="true"><svg id="mermaid-2" width="100%" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" class="flowchart" style="max-width: 669.89453125px;" viewBox="0 0 669.89453125 529.1068115234375" role="graphics-document document" aria-roledescription="flowchart-v2"><style>#mermaid-2{font-family:"trebuchet ms",verdana,arial,sans-serif;font-size:16px;fill:#000000;}#mermaid-2 .error-icon{fill:#552222;}#mermaid-2 .error-text{fill:#552222;stroke:#552222;}#mermaid-2 .edge-thickness-normal{stroke-width:1px;}#mermaid-2 .edge-thickness-thick{stroke-width:3.5px;}#mermaid-2 .edge-pattern-solid{stroke-dasharray:0;}#mermaid-2 .edge-thickness-invisible{stroke-width:0;fill:none;}#mermaid-2 .edge-pattern-dashed{stroke-dasharray:3;}#mermaid-2 .edge-pattern-dotted{stroke-dasharray:2;}#mermaid-2 .marker{fill:#666;stroke:#666;}#mermaid-2 .marker.cross{stroke:#666;}#mermaid-2 svg{font-family:"trebuchet ms",verdana,arial,sans-serif;font-size:16px;}#mermaid-2 p{margin:0;}#mermaid-2 .label{font-family:"trebuchet ms",verdana,arial,sans-serif;color:#000000;}#mermaid-2 .cluster-label text{fill:#333;}#mermaid-2 .cluster-label span{color:#333;}#mermaid-2 .cluster-label span p{background-color:transparent;}#mermaid-2 .label text,#mermaid-2 span{fill:#000000;color:#000000;}#mermaid-2 .node rect,#mermaid-2 .node circle,#mermaid-2 .node ellipse,#mermaid-2 .node polygon,#mermaid-2 .node path{fill:#eee;stroke:#999;stroke-width:1px;}#mermaid-2 .rough-node .label text,#mermaid-2 .node .label text,#mermaid-2 .image-shape .label,#mermaid-2 .icon-shape .label{text-anchor:middle;}#mermaid-2 .node .katex path{fill:#000;stroke:#000;stroke-width:1px;}#mermaid-2 .rough-node .label,#mermaid-2 .node .label,#mermaid-2 .image-shape .label,#mermaid-2 .icon-shape .label{text-align:center;}#mermaid-2 .node.clickable{cursor:pointer;}#mermaid-2 .root .anchor path{fill:#666!important;stroke-width:0;stroke:#666;}#mermaid-2 .arrowheadPath{fill:#333333;}#mermaid-2 .edgePath .path{stroke:#666;stroke-width:2.0px;}#mermaid-2 .flowchart-link{stroke:#666;fill:none;}#mermaid-2 .edgeLabel{background-color:white;text-align:center;}#mermaid-2 .edgeLabel p{background-color:white;}#mermaid-2 .edgeLabel rect{opacity:0.5;background-color:white;fill:white;}#mermaid-2 .labelBkg{background-color:rgba(255, 255, 255, 0.5);}#mermaid-2 .cluster rect{fill:hsl(0, 0%, 98.9215686275%);stroke:#707070;stroke-width:1px;}#mermaid-2 .cluster text{fill:#333;}#mermaid-2 .cluster span{color:#333;}#mermaid-2 div.mermaidTooltip{position:absolute;text-align:center;max-width:200px;padding:2px;font-family:"trebuchet ms",verdana,arial,sans-serif;font-size:12px;background:hsl(-160, 0%, 93.3333333333%);border:1px solid #707070;border-radius:2px;pointer-events:none;z-index:100;}#mermaid-2 .flowchartTitleText{text-anchor:middle;font-size:18px;fill:#000000;}#mermaid-2 rect.text{fill:none;stroke-width:0;}#mermaid-2 .icon-shape,#mermaid-2 .image-shape{background-color:white;text-align:center;}#mermaid-2 .icon-shape p,#mermaid-2 .image-shape p{background-color:white;padding:2px;}#mermaid-2 .icon-shape rect,#mermaid-2 .image-shape rect{opacity:0.5;background-color:white;fill:white;}#mermaid-2 :root{--mermaid-font-family:"trebuchet ms",verdana,arial,sans-serif;}#mermaid-2 .t&gt;*{fill:#fef2f2!important;stroke:#dc2626!important;color:#7f1d1d!important;}#mermaid-2 .t span{fill:#fef2f2!important;stroke:#dc2626!important;color:#7f1d1d!important;}#mermaid-2 .t tspan{fill:#7f1d1d!important;}</style><g><marker id="mermaid-2_flowchart-v2-pointEnd" class="marker flowchart-v2" viewBox="0 0 10 10" refX="5" refY="5" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="8" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" class="arrowMarkerPath" style="stroke-width: 1; stroke-dasharray: 1, 0;"></path></marker><marker id="mermaid-2_flowchart-v2-pointStart" class="marker flowchart-v2" viewBox="0 0 10 10" refX="4.5" refY="5" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="8" orient="auto"><path d="M 0 5 L 10 10 L 10 0 z" class="arrowMarkerPath" style="stroke-width: 1; stroke-dasharray: 1, 0;"></path></marker><marker id="mermaid-2_flowchart-v2-circleEnd" class="marker flowchart-v2" viewBox="0 0 10 10" refX="11" refY="5" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto"><circle cx="5" cy="5" r="5" class="arrowMarkerPath" style="stroke-width: 1; stroke-dasharray: 1, 0;"></circle></marker><marker id="mermaid-2_flowchart-v2-circleStart" class="marker flowchart-v2" viewBox="0 0 10 10" refX="-1" refY="5" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto"><circle cx="5" cy="5" r="5" class="arrowMarkerPath" style="stroke-width: 1; stroke-dasharray: 1, 0;"></circle></marker><marker id="mermaid-2_flowchart-v2-crossEnd" class="marker cross flowchart-v2" viewBox="0 0 11 11" refX="12" refY="5.2" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto"><path d="M 1,1 l 9,9 M 10,1 l -9,9" class="arrowMarkerPath" style="stroke-width: 2; stroke-dasharray: 1, 0;"></path></marker><marker id="mermaid-2_flowchart-v2-crossStart" class="marker cross flowchart-v2" viewBox="0 0 11 11" refX="-1" refY="5.2" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto"><path d="M 1,1 l 9,9 M 10,1 l -9,9" class="arrowMarkerPath" style="stroke-width: 2; stroke-dasharray: 1, 0;"></path></marker><g class="root"><g class="clusters"></g><g class="edgePaths"><path d="M110.938,66.5L110.938,73.417C110.938,80.333,110.938,94.167,121.243,106.921C131.548,119.676,152.159,131.352,162.465,137.19L172.77,143.028" id="L_wb_D_wb_W_0" class=" edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style="" marker-end="url(#mermaid-2_flowchart-v2-pointEnd)"></path><path d="M225.349,223L222.227,229.167C219.105,235.333,212.861,247.667,211.222,259.98C209.582,272.293,212.547,284.587,214.029,290.733L215.512,296.88" id="L_wb_W_wb_L_1" class=" edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style="" marker-end="url(#mermaid-2_flowchart-v2-pointEnd)"></path><path d="M225.855,378.768L225.855,383.563C225.855,388.358,225.855,397.947,225.855,406.242C225.855,414.537,225.855,421.537,225.855,425.037L225.855,428.537" id="L_wb_L_wb_P_2" class=" edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style="" marker-end="url(#mermaid-2_flowchart-v2-pointEnd)"></path><path d="M330.753,223L344.297,229.167C357.842,235.333,384.931,247.667,409.327,260.598C433.723,273.53,455.426,287.061,466.277,293.826L477.129,300.591" id="L_wb_W_wb_P2_3" class=" edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style="" marker-end="url(#mermaid-2_flowchart-v2-pointEnd)"></path><path d="M379.25,71L379.25,77.167C379.25,83.333,379.25,95.667,368.945,107.671C358.639,119.676,338.028,131.352,327.723,137.19L317.417,143.028" id="L_wb_TD_wb_W_4" class=" edge-thickness-normal edge-pattern-dotted edge-thickness-normal edge-pattern-solid flowchart-link" style=";stroke:#dc2626;stroke-width:2px;fill:none" marker-end="url(#mermaid-2_flowchart-v2-pointEnd)"></path><path d="M471.282,215.5L454.993,222.917C438.703,230.333,406.123,245.167,377.839,259.061C349.556,272.956,325.569,285.912,313.575,292.39L301.582,298.868" id="L_wb_TW_wb_L_5" class=" edge-thickness-normal edge-pattern-dotted edge-thickness-normal edge-pattern-solid flowchart-link" style=";stroke:#dc2626;stroke-width:2px;fill:none" marker-end="url(#mermaid-2_flowchart-v2-pointEnd)"></path><path d="M556.416,215.5L560.171,222.917C563.926,230.333,571.436,245.167,573.859,258.115C576.283,271.063,573.62,282.127,572.289,287.659L570.958,293.19" id="L_wb_TW_wb_P2_6" class=" edge-thickness-normal edge-pattern-dotted edge-thickness-normal edge-pattern-solid flowchart-link" style=";stroke:#dc2626;stroke-width:2px;fill:none" marker-end="url(#mermaid-2_flowchart-v2-pointEnd)"></path></g><g class="edgeLabels"><g class="edgeLabel"><g class="label" transform="translate(0, 0)"><foreignObject width="0" height="0"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel "></span></div></foreignObject></g></g><g class="edgeLabel"><g class="label" transform="translate(0, 0)"><foreignObject width="0" height="0"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel "></span></div></foreignObject></g></g><g class="edgeLabel"><g class="label" transform="translate(0, 0)"><foreignObject width="0" height="0"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel "></span></div></foreignObject></g></g><g class="edgeLabel"><g class="label" transform="translate(0, 0)"><foreignObject width="0" height="0"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel "></span></div></foreignObject></g></g><g class="edgeLabel" transform="translate(379.25, 108)"><g class="label" transform="translate(-18.4765625, -12)"><foreignObject width="36.953125" height="24"><div style="stroke: rgb(220, 38, 38); stroke-width: 2px; display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;" xmlns="http://www.w3.org/1999/xhtml" class="labelBkg"><span style=";stroke:#dc2626;stroke-width:2px;color:none" class="edgeLabel "><p>stubs</p></span></div></foreignObject></g></g><g class="edgeLabel" transform="translate(373.54296875, 260)"><g class="label" transform="translate(-18.4765625, -12)"><foreignObject width="36.953125" height="24"><div style="stroke: rgb(220, 38, 38); stroke-width: 2px; display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;" xmlns="http://www.w3.org/1999/xhtml" class="labelBkg"><span style=";stroke:#dc2626;stroke-width:2px;color:none" class="edgeLabel "><p>stubs</p></span></div></foreignObject></g></g><g class="edgeLabel" transform="translate(578.9453125, 260)"><g class="label" transform="translate(-18.4765625, -12)"><foreignObject width="36.953125" height="24"><div style="stroke: rgb(220, 38, 38); stroke-width: 2px; display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;" xmlns="http://www.w3.org/1999/xhtml" class="labelBkg"><span style=";stroke:#dc2626;stroke-width:2px;color:none" class="edgeLabel "><p>stubs</p></span></div></foreignObject></g></g></g><g class="nodes"><g class="node default  " id="flowchart-wb_D-31" transform="translate(110.9375, 39.5)"><rect class="basic label-container" style="" x="-102.9375" y="-27" width="205.875" height="54"></rect><g class="label" style="" transform="translate(-72.9375, -12)"><rect></rect><foreignObject width="145.875" height="24"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel "><p>useReportDashboard</p></span></div></foreignObject></g></g><g class="node default  " id="flowchart-wb_W-32" transform="translate(245.09375, 184)"><rect class="basic label-container" style="" x="-130" y="-39" width="260" height="78"></rect><g class="label" style="" transform="translate(-100, -24)"><rect></rect><foreignObject width="200" height="48"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table; white-space: break-spaces; line-height: 1.5; max-width: 200px; text-align: center; width: 200px;"><span class="nodeLabel "><p>useWidgetData · 16 in / 22 out</p></span></div></foreignObject></g></g><g class="node default  " id="flowchart-wb_L-34" transform="translate(225.85546875, 339.768497467041)"><rect class="basic label-container" style="" x="-130" y="-39" width="260" height="78"></rect><g class="label" style="" transform="translate(-100, -24)"><rect></rect><foreignObject width="200" height="48"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table; white-space: break-spaces; line-height: 1.5; max-width: 200px; text-align: center; width: 200px;"><span class="nodeLabel "><p>widgetDataLoader · 1 adapter · 1 caller</p></span></div></foreignObject></g></g><g class="node default  " id="flowchart-wb_P-36" transform="translate(225.85546875, 476.8218994140625)"><path d="M0,16.523268627617192 a121.828125,16.523268627617192 0,0,0 243.65625,0 a121.828125,16.523268627617192 0,0,0 -243.65625,0 l0,55.52326862761719 a121.828125,16.523268627617192 0,0,0 243.65625,0 l0,-55.52326862761719" class="basic label-container" style="" label-offset-y="16.523268627617192" transform="translate(-121.828125, -44.284902941425784)"></path><g class="label" style="" transform="translate(-114.328125, -2)"><rect></rect><foreignObject width="228.65625" height="24"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table; white-space: break-spaces; line-height: 1.5; max-width: 200px; text-align: center; width: 200px;"><span class="nodeLabel "><p>planEditApi.fetchPlanChartData</p></span></div></foreignObject></g></g><g class="node default  " id="flowchart-wb_P2-38" transform="translate(559.70703125, 339.768497467041)"><path d="M0,15.512333965844402 a102.1875,15.512333965844402 0,0,0 204.375,0 a102.1875,15.512333965844402 0,0,0 -204.375,0 l0,54.512333965844405 a102.1875,15.512333965844402 0,0,0 204.375,0 l0,-54.512333965844405" class="basic label-container" style="" label-offset-y="15.512333965844402" transform="translate(-102.1875, -42.7685009487666)"></path><g class="label" style="" transform="translate(-94.6875, -2)"><rect></rect><foreignObject width="189.375" height="24"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel "><p>planEditApi.fetchPlanData</p></span></div></foreignObject></g></g><g class="node default t " id="flowchart-wb_TD-39" transform="translate(379.25, 39.5)"><rect class="basic label-container" style="fill:#fef2f2 !important;stroke:#dc2626 !important" rx="31.5" ry="31.5" x="-115.375" y="-31.5" width="230.75" height="63"></rect><g class="label" style="color:#7f1d1d !important" transform="translate(-100, -24)"><rect></rect><foreignObject width="200" height="48"><div style="color: rgb(127, 29, 29) !important; display: table; white-space: break-spaces; line-height: 1.5; max-width: 200px; text-align: center; width: 200px;" xmlns="http://www.w3.org/1999/xhtml"><span style="color:#7f1d1d !important" class="nodeLabel "><p>useReportDashboard.test · 19-field hand copy</p></span></div></foreignObject></g></g><g class="node default t " id="flowchart-wb_TW-41" transform="translate(540.46875, 184)"><rect class="basic label-container" style="fill:#fef2f2 !important;stroke:#dc2626 !important" rx="31.5" ry="31.5" x="-115.375" y="-31.5" width="230.75" height="63"></rect><g class="label" style="color:#7f1d1d !important" transform="translate(-100, -24)"><rect></rect><foreignObject width="200" height="48"><div style="color: rgb(127, 29, 29) !important; display: table; white-space: break-spaces; line-height: 1.5; max-width: 200px; text-align: center; width: 200px;" xmlns="http://www.w3.org/1999/xhtml"><span style="color:#7f1d1d !important" class="nodeLabel "><p>useWidgetData.* ×4 · identical mock blocks</p></span></div></foreignObject></g></g></g></g></g></svg></pre>
+            </figure>
+            <figure class="rounded-lg border border-stone-200 p-4 diagram">
+              <figcaption class="schem text-slate-500 mb-2">After · the loader moves inside; the seam moves to the wire</figcaption>
+              <pre class="mermaid" data-processed="true"><svg id="mermaid-3" width="100%" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" class="flowchart" style="max-width: 606.8125px;" viewBox="0 0 606.8125 374.967529296875" role="graphics-document document" aria-roledescription="flowchart-v2"><style>#mermaid-3{font-family:"trebuchet ms",verdana,arial,sans-serif;font-size:16px;fill:#000000;}#mermaid-3 .error-icon{fill:#552222;}#mermaid-3 .error-text{fill:#552222;stroke:#552222;}#mermaid-3 .edge-thickness-normal{stroke-width:1px;}#mermaid-3 .edge-thickness-thick{stroke-width:3.5px;}#mermaid-3 .edge-pattern-solid{stroke-dasharray:0;}#mermaid-3 .edge-thickness-invisible{stroke-width:0;fill:none;}#mermaid-3 .edge-pattern-dashed{stroke-dasharray:3;}#mermaid-3 .edge-pattern-dotted{stroke-dasharray:2;}#mermaid-3 .marker{fill:#666;stroke:#666;}#mermaid-3 .marker.cross{stroke:#666;}#mermaid-3 svg{font-family:"trebuchet ms",verdana,arial,sans-serif;font-size:16px;}#mermaid-3 p{margin:0;}#mermaid-3 .label{font-family:"trebuchet ms",verdana,arial,sans-serif;color:#000000;}#mermaid-3 .cluster-label text{fill:#333;}#mermaid-3 .cluster-label span{color:#333;}#mermaid-3 .cluster-label span p{background-color:transparent;}#mermaid-3 .label text,#mermaid-3 span{fill:#000000;color:#000000;}#mermaid-3 .node rect,#mermaid-3 .node circle,#mermaid-3 .node ellipse,#mermaid-3 .node polygon,#mermaid-3 .node path{fill:#eee;stroke:#999;stroke-width:1px;}#mermaid-3 .rough-node .label text,#mermaid-3 .node .label text,#mermaid-3 .image-shape .label,#mermaid-3 .icon-shape .label{text-anchor:middle;}#mermaid-3 .node .katex path{fill:#000;stroke:#000;stroke-width:1px;}#mermaid-3 .rough-node .label,#mermaid-3 .node .label,#mermaid-3 .image-shape .label,#mermaid-3 .icon-shape .label{text-align:center;}#mermaid-3 .node.clickable{cursor:pointer;}#mermaid-3 .root .anchor path{fill:#666!important;stroke-width:0;stroke:#666;}#mermaid-3 .arrowheadPath{fill:#333333;}#mermaid-3 .edgePath .path{stroke:#666;stroke-width:2.0px;}#mermaid-3 .flowchart-link{stroke:#666;fill:none;}#mermaid-3 .edgeLabel{background-color:white;text-align:center;}#mermaid-3 .edgeLabel p{background-color:white;}#mermaid-3 .edgeLabel rect{opacity:0.5;background-color:white;fill:white;}#mermaid-3 .labelBkg{background-color:rgba(255, 255, 255, 0.5);}#mermaid-3 .cluster rect{fill:hsl(0, 0%, 98.9215686275%);stroke:#707070;stroke-width:1px;}#mermaid-3 .cluster text{fill:#333;}#mermaid-3 .cluster span{color:#333;}#mermaid-3 div.mermaidTooltip{position:absolute;text-align:center;max-width:200px;padding:2px;font-family:"trebuchet ms",verdana,arial,sans-serif;font-size:12px;background:hsl(-160, 0%, 93.3333333333%);border:1px solid #707070;border-radius:2px;pointer-events:none;z-index:100;}#mermaid-3 .flowchartTitleText{text-anchor:middle;font-size:18px;fill:#000000;}#mermaid-3 rect.text{fill:none;stroke-width:0;}#mermaid-3 .icon-shape,#mermaid-3 .image-shape{background-color:white;text-align:center;}#mermaid-3 .icon-shape p,#mermaid-3 .image-shape p{background-color:white;padding:2px;}#mermaid-3 .icon-shape rect,#mermaid-3 .image-shape rect{opacity:0.5;background-color:white;fill:white;}#mermaid-3 :root{--mermaid-font-family:"trebuchet ms",verdana,arial,sans-serif;}#mermaid-3 .faded&gt;*{fill:#334155!important;stroke:#475569!important;color:#cbd5e1!important;}#mermaid-3 .faded span{fill:#334155!important;stroke:#475569!important;color:#cbd5e1!important;}#mermaid-3 .faded tspan{fill:#cbd5e1!important;}#mermaid-3 .ok&gt;*{fill:#ecfdf5!important;stroke:#059669!important;color:#065f46!important;}#mermaid-3 .ok span{fill:#ecfdf5!important;stroke:#059669!important;color:#065f46!important;}#mermaid-3 .ok tspan{fill:#065f46!important;}</style><g><marker id="mermaid-3_flowchart-v2-pointEnd" class="marker flowchart-v2" viewBox="0 0 10 10" refX="5" refY="5" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="8" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" class="arrowMarkerPath" style="stroke-width: 1; stroke-dasharray: 1, 0;"></path></marker><marker id="mermaid-3_flowchart-v2-pointStart" class="marker flowchart-v2" viewBox="0 0 10 10" refX="4.5" refY="5" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="8" orient="auto"><path d="M 0 5 L 10 10 L 10 0 z" class="arrowMarkerPath" style="stroke-width: 1; stroke-dasharray: 1, 0;"></path></marker><marker id="mermaid-3_flowchart-v2-circleEnd" class="marker flowchart-v2" viewBox="0 0 10 10" refX="11" refY="5" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto"><circle cx="5" cy="5" r="5" class="arrowMarkerPath" style="stroke-width: 1; stroke-dasharray: 1, 0;"></circle></marker><marker id="mermaid-3_flowchart-v2-circleStart" class="marker flowchart-v2" viewBox="0 0 10 10" refX="-1" refY="5" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto"><circle cx="5" cy="5" r="5" class="arrowMarkerPath" style="stroke-width: 1; stroke-dasharray: 1, 0;"></circle></marker><marker id="mermaid-3_flowchart-v2-crossEnd" class="marker cross flowchart-v2" viewBox="0 0 11 11" refX="12" refY="5.2" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto"><path d="M 1,1 l 9,9 M 10,1 l -9,9" class="arrowMarkerPath" style="stroke-width: 2; stroke-dasharray: 1, 0;"></path></marker><marker id="mermaid-3_flowchart-v2-crossStart" class="marker cross flowchart-v2" viewBox="0 0 11 11" refX="-1" refY="5.2" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto"><path d="M 1,1 l 9,9 M 10,1 l -9,9" class="arrowMarkerPath" style="stroke-width: 2; stroke-dasharray: 1, 0;"></path></marker><g class="root"><g class="clusters"><g class="cluster " id="wa_deep" data-look="classic"><rect style="fill:#0f172a !important;stroke:#0f172a !important" x="14.8203125" y="112" width="420.8359375" height="254.96753692626953"></rect><g class="cluster-label " transform="translate(171.78515625, 112)"><foreignObject width="106.90625" height="24"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel " style="color:#e2e8f0 !important"><p>useWidgetData</p></span></div></foreignObject></g></g></g><g class="edgePaths"><path d="M110.938,62L110.938,66.167C110.938,70.333,110.938,78.667,110.938,87C110.938,95.333,110.938,103.667,119.886,111.734C128.834,119.801,146.73,127.601,155.679,131.501L164.627,135.402" id="L_wa_D_wa_W_0" class=" edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style="" marker-end="url(#mermaid-3_flowchart-v2-pointEnd)"></path><path d="M201.594,191L195.051,197.167C188.509,203.333,175.424,215.667,168.882,229.247C162.34,242.828,162.34,257.656,162.34,265.07L162.34,272.484" id="L_wa_W_wa_L_1" class=" edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style="" marker-end="url(#mermaid-3_flowchart-v2-pointEnd)"></path><path d="M276.677,191L287.284,197.167C297.89,203.333,319.103,215.667,350.812,230.026C382.52,244.386,424.724,260.772,445.826,268.964L466.927,277.157" id="L_wa_W_wa_S_2" class=" edge-thickness-normal edge-pattern-dotted edge-thickness-normal edge-pattern-solid flowchart-link" style="" marker-end="url(#mermaid-3_flowchart-v2-pointEnd)"></path><path d="M349.539,54.5L349.539,59.917C349.539,65.333,349.539,76.167,349.539,85.75C349.539,95.333,349.539,103.667,340.591,111.734C331.643,119.801,313.746,127.601,304.798,131.501L295.85,135.402" id="L_wa_T_wa_W_3" class=" edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style="" marker-end="url(#mermaid-3_flowchart-v2-pointEnd)"></path></g><g class="edgeLabels"><g class="edgeLabel"><g class="label" transform="translate(0, 0)"><foreignObject width="0" height="0"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel "></span></div></foreignObject></g></g><g class="edgeLabel"><g class="label" transform="translate(0, 0)"><foreignObject width="0" height="0"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel "></span></div></foreignObject></g></g><g class="edgeLabel" transform="translate(340.31640625, 228)"><g class="label" transform="translate(-18.4453125, -12)"><foreignObject width="36.890625" height="24"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel "><p>seam</p></span></div></foreignObject></g></g><g class="edgeLabel"><g class="label" transform="translate(0, 0)"><foreignObject width="0" height="0"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel "></span></div></foreignObject></g></g></g><g class="nodes"><g class="node default  " id="flowchart-wa_D-45" transform="translate(110.9375, 35)"><rect class="basic label-container" style="" x="-102.9375" y="-27" width="205.875" height="54"></rect><g class="label" style="" transform="translate(-72.9375, -12)"><rect></rect><foreignObject width="145.875" height="24"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel "><p>useReportDashboard</p></span></div></foreignObject></g></g><g class="node default  " id="flowchart-wa_W-46" transform="translate(230.23828125, 164)"><rect class="basic label-container" style="" x="-117.234375" y="-27" width="234.46875" height="54"></rect><g class="label" style="" transform="translate(-87.234375, -12)"><rect></rect><foreignObject width="174.46875" height="24"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel "><p>interface: 16 in / 22 out</p></span></div></foreignObject></g></g><g class="node default faded " id="flowchart-wa_L-48" transform="translate(162.33984375, 303.48376846313477)"><rect class="basic label-container" style="fill:#334155 !important;stroke:#475569 !important" x="-107.8046875" y="-27" width="215.609375" height="54"></rect><g class="label" style="color:#cbd5e1 !important" transform="translate(-77.8046875, -12)"><rect></rect><foreignObject width="155.609375" height="24"><div style="color: rgb(203, 213, 225) !important; display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;" xmlns="http://www.w3.org/1999/xhtml"><span style="color:#cbd5e1 !important" class="nodeLabel "><p>chart loader (private)</p></span></div></foreignObject></g></g><g class="node default  " id="flowchart-wa_S-50" transform="translate(534.734375, 303.48376846313477)"><path d="M0,12.655844957412667 a64.078125,12.655844957412667 0,0,0 128.15625,0 a64.078125,12.655844957412667 0,0,0 -128.15625,0 l0,51.65584495741267 a64.078125,12.655844957412667 0,0,0 128.15625,0 l0,-51.65584495741267" class="basic label-container" style="" label-offset-y="12.655844957412667" transform="translate(-64.078125, -38.483767436119)"></path><g class="label" style="" transform="translate(-56.578125, -2)"><rect></rect><foreignObject width="113.15625" height="24"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel "><p>plan server (#2)</p></span></div></foreignObject></g></g><g class="node default ok " id="flowchart-wa_T-51" transform="translate(349.5390625, 35)"><rect class="basic label-container" style="fill:#ecfdf5 !important;stroke:#059669 !important" rx="19.5" ry="19.5" x="-85.6640625" y="-19.5" width="171.328125" height="39"></rect><g class="label" style="color:#065f46 !important" transform="translate(-73.2890625, -12)"><rect></rect><foreignObject width="146.578125" height="24"><div style="color: rgb(6, 95, 70) !important; display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;" xmlns="http://www.w3.org/1999/xhtml"><span style="color:#065f46 !important" class="nodeLabel "><p>useWidgetData suite</p></span></div></foreignObject></g></g></g></g></g></svg></pre>
+            </figure>
+          </div>
+          <dl class="grid sm:grid-cols-[110px_1fr] gap-x-4 gap-y-2 text-sm">
+            <dt class="schem text-slate-500 pt-0.5">Problem</dt><dd><span class="mono">widgetDataLoader</span> has one adapter and one caller, so it is a hypothetical seam. Five tests stub it only because their planEditApi stub leaves out <span class="mono">fetchPlanChartData</span>. On top of that, useReportDashboard's hand-copied stub of useWidgetData has drifted to 19 of the 22 fields.</dd>
+            <dt class="schem text-slate-500 pt-0.5">Solution</dt><dd>Fold the loader into useWidgetData's implementation and test useWidgetData against the plan server alone. <span class="mono">useWidgetData.yearAndGrainOnWire</span> already works this way.</dd>
+          </dl>
+          <div class="flex flex-wrap gap-2 text-xs">
+            <span class="px-2 py-1 bg-slate-900 text-white rounded">delete a one-adapter seam</span>
+            <span class="px-2 py-1 bg-slate-900 text-white rounded">4 identical mock blocks go</span>
+          </div>
+          <div class="rounded-lg bg-stone-50 border border-stone-200 p-4 text-sm space-y-2">
+            <p class="schem text-slate-500">Tests · 8 → 3</p>
+            <ul class="space-y-1.5">
+              <li><b class="text-amber-700">Merge</b> into one interface suite: <span class="mono text-xs">useWidgetData.{filterRederive, paneScope, shapeGate, metrics}</span> and <span class="mono text-xs">widgetDataLoader.test</span>. Its chart cases move over unchanged.</li>
+              <li><b class="text-emerald-700">Survive</b>:
+                <ul class="pl-4 list-disc">
+                  <li><span class="mono text-xs">useWidgetData.yearAndGrainOnWire</span>, the template.</li>
+                  <li><span class="mono text-xs">useWidgetData.grouping</span>: pure functions, no mocks.</li>
+                  <li><span class="mono text-xs">varianceUnit.e2e</span>, minus its loader mock.</li>
+                </ul>
+              </li>
+            </ul>
+            <p><b>Mocks that go</b>:
+              </p><ul class="pl-4 list-disc">
+                <li><span class="mono">widgetDataLoader</span> in 5 files.</li>
+                <li><span class="mono">planEditApi</span> in 5 files (via #2).</li>
+                <li><span class="mono">AgentScopeContext</span> in 4 files, replaced by the real provider.</li>
+                <li>The 19-field <span class="mono">useWidgetData</span> stub in useReportDashboard.test, which becomes typed.</li>
+              </ul>
+            <p></p>
+          </div>
+        </article>
+
+        <!-- ===== 8 ===== -->
+        <article id="c8" class="rounded-2xl border border-stone-200 bg-white shadow-sm p-6 sm:p-8 space-y-6">
+          <header class="space-y-3">
+            <p class="schem text-slate-400">08</p>
+            <h3 class="font-serif text-2xl">Make ReportDashboard mountable</h3>
+            <div class="flex flex-wrap gap-2 text-xs">
+              <span class="px-2 py-1 rounded-full bg-slate-200 text-slate-700 font-semibold">Speculative</span>
+              <span class="px-2 py-1 rounded-full bg-slate-100 text-slate-700">needs #2 #3 #5</span>
+              <span class="px-2 py-1 rounded-full bg-stone-100 text-stone-700">8 test files → ~2</span>
+            </div>
+          </header>
+          <div class="mono text-xs text-slate-600 leading-relaxed">components/ReportDashboard.tsx (2,768 LOC) · hooks/report/useReportDashboard.tsx (946) · ReportDashboard.*.test (8)</div>
+          <div class="grid md:grid-cols-2 gap-6">
+            <figure class="rounded-lg border border-stone-200 p-4 diagram">
+              <figcaption class="schem text-slate-500 mb-2">Before · 8 tests around it, none mount it</figcaption>
+              <svg viewBox="0 0 460 300" class="w-full">
+                <rect x="150" y="110" width="160" height="80" rx="6" fill="#fff" stroke="#334155" stroke-width="2" class="seam"></rect>
+                <text x="230" y="140" text-anchor="middle" class="schem" fill="#334155">ReportDashboard</text>
+                <text x="230" y="158" text-anchor="middle" font-size="10" fill="#64748b">2,768 LOC</text>
+                <text x="230" y="174" text-anchor="middle" font-size="10" fill="#dc2626">mounted by 0 tests</text>
+                <g font-size="10">
+                  <rect x="10" y="14" width="190" height="62" rx="5" fill="#f8fafc" stroke="#cbd5e1"></rect>
+                  <text x="20" y="32" class="schem" fill="#334155">exported helpers · 4</text>
+                  <text x="20" y="48" fill="#475569">classifyTransitionResponse,</text><text x="20" y="62" fill="#475569">deriveViewWritability, …</text>
+                  <rect x="260" y="14" width="190" height="62" rx="5" fill="#fef2f2" stroke="#fca5a5"></rect>
+                  <text x="270" y="32" class="schem" fill="#991b1b">regex over source · 2</text>
+                  <text x="270" y="48" fill="#991b1b">overlayGeometry,</text><text x="270" y="62" fill="#991b1b">sectionDispatch:239</text>
+                  <rect x="10" y="224" width="190" height="62" rx="5" fill="#fef2f2" stroke="#fca5a5"></rect>
+                  <text x="20" y="242" class="schem" fill="#991b1b">stand-in dashboards · 3</text>
+                  <text x="20" y="258" fill="#991b1b">built by hand from its hooks:</text><text x="20" y="272" fill="#991b1b">sectionDispatch, viewModePanes, paneContext</text>
+                  <rect x="260" y="224" width="190" height="62" rx="5" fill="#fef2f2" stroke="#fca5a5"></rect>
+                  <text x="270" y="242" class="schem" fill="#991b1b">across the repo</text>
+                  <text x="270" y="258" fill="#991b1b">23 tests regex the source;</text><text x="270" y="272" fill="#991b1b">"would need the whole tree"</text>
+                </g>
+                <g stroke="#dc2626" stroke-width="1.5" fill="none"><line x1="200" y1="76" x2="200" y2="110" stroke="#94a3b8"></line><line x1="300" y1="76" x2="280" y2="110"></line><line x1="160" y1="224" x2="190" y2="190"></line><line x1="330" y1="224" x2="290" y2="190"></line></g>
+              </svg>
+            </figure>
+            <figure class="rounded-lg border border-stone-200 p-4 diagram space-y-2 text-xs">
+              <figcaption class="schem text-slate-500">After · one harness, I/O behind two fakes</figcaption>
+              <div class="rounded bg-emerald-50 border border-emerald-300 p-2 text-emerald-900">dashboard harness: N widgets, a scenario, a plan</div>
+              <div class="text-center text-slate-400">↓</div>
+              <div class="deep rounded h-32 p-3 text-slate-100"><div class="schem text-slate-400">ReportDashboard · mounted</div><div class="text-slate-500 mt-2">read path (#3) · edit session (#5) · widget data (#7) · helpers private</div></div>
+              <svg viewBox="0 0 400 18" class="w-full"><line x1="0" y1="9" x2="400" y2="9" stroke="#0f172a" stroke-width="2" class="seam"></line></svg>
+              <div class="grid grid-cols-2 gap-2"><div class="rounded border-2 border-slate-400 p-2">plan server (#2)</div><div class="rounded border-2 border-slate-400 p-2">reportApi fake</div></div>
+            </figure>
+          </div>
+          <dl class="grid sm:grid-cols-[110px_1fr] gap-x-4 gap-y-2 text-sm">
+            <dt class="schem text-slate-500 pt-0.5">Problem</dt><dd>No test renders ReportDashboard. Its tests either test helpers it exports, regex its source, or rebuild a stand-in dashboard from its hooks.</dd>
+            <dt class="schem text-slate-500 pt-0.5">Solution</dt><dd>Once #2, #3 and #5 land, the dashboard's I/O sits behind two fakes. One harness can then mount it, and the helpers it exports only for tests can go private.</dd>
+            <dt class="schem text-slate-500 pt-0.5">Why Speculative</dt><dd>It depends on three other candidates, and it is the largest module in the repo.</dd>
+          </dl>
+          <div class="rounded-lg bg-stone-50 border border-stone-200 p-4 text-sm space-y-2">
+            <p class="schem text-slate-500">Tests · 8 → ~2</p>
+            <ul class="space-y-1.5">
+              <li><b class="text-red-700">Replaced</b>:
+                <ul class="pl-4 list-disc">
+                  <li><span class="mono text-xs">overlayGeometry</span> and <span class="mono text-xs">sectionDispatch</span> (source regex) → harness cases asserting the rendered overlay and which section was dispatched.</li>
+                  <li>The 3 stand-in dashboards → the same cases run against the real dashboard.</li>
+                </ul>
+              </li>
+              <li><b class="text-amber-700">Merge</b>: the 4 exported-helper files fold into the harness suite. Pure transition classification can stay as a second small suite.</li>
+            </ul>
+            <p><b>Mocks that go</b>: <span class="mono">useReportDashboard.test</span>'s 4 internal mocks (useWidgetData, useReportConfig, useMetricPreferences, useReportExport).</p>
+          </div>
+        </article>
+      </section>
+
+      <!-- ================= TOP RECOMMENDATION ================= -->
+      <section id="top-recommendation" class="rounded-2xl deep text-slate-100 p-8 space-y-3">
+        <p class="schem text-emerald-300">Top recommendation</p>
+        <h2 class="font-serif text-3xl"><a href="#c1" class="underline decoration-emerald-400 underline-offset-4">01 · Collapse cell writability into one verdict</a></h2>
+        <p class="text-slate-300 max-w-3xl">It runs in-process, so it needs no new test infrastructure. It collapses 20 files into 2 suites. And three shipped bugs (RT1-4503, RT1-4505, RT1-4070) sat in exactly the wiring today's tests cannot see, so it shows the pattern pays off before any bigger investment.</p>
+        <p class="text-slate-400 text-sm">Next: <a href="#c2" class="underline">02 · the plan backend seam</a>. Its adapter is what #3, #5, #7 and #8 all build on.</p>
+      </section>
+
+      <!-- ================= CONVENTION ================= -->
+      <section id="convention" class="rounded-2xl border border-stone-300 bg-white p-6 sm:p-8 space-y-4">
+        <p class="schem text-slate-500">Test layout convention · not a candidate</p>
+        <h2 class="font-serif text-2xl">One co-located suite per module interface</h2>
+        <ul class="text-sm text-slate-700 space-y-1.5 list-disc pl-5">
+          <li>Name the suite <span class="mono">&lt;Module&gt;.test.tsx</span>, next to the module it covers.</li>
+          <li>Scenarios become <span class="mono">describe</span> blocks, not filename suffixes like <span class="mono">.lockTint.</span> or <span class="mono">.weekLock.</span>.</li>
+          <li>No <span class="mono">__tests__/</span> directories. 162 files use them today, and the feature-root <span class="mono">__tests__/</span> rule in <span class="mono">conventions-typescript/SKILL.md:113</span> has already separated 17 tests from the source they cover (StoreCluster 8, UserManagement 6, Settings 3).</li>
+          <li>Shared test adapters go in two places:
+            <ul class="pl-4 list-disc">
+              <li><span class="mono">src/test/</span> for adapters that cross features: the plan server, a provider-wrapped render.</li>
+              <li><span class="mono">&lt;feature&gt;/testing/</span> for builders private to one feature, such as <span class="mono">makeWidget</span>. The ESLint deep-import rule applies to tests too, so these must be imported relatively from inside the feature.</li>
+            </ul>
+          </li>
+        </ul>
+        <p class="text-sm"><b>Main tradeoff</b>: a deep module's suite gets long. <span class="mono">useTableEditState.test.tsx</span> already has 141 tests, and splitting by filename suffix was the release valve for that. This convention accepts longer files, navigated by <span class="mono">describe</span>, in exchange for fewer files. Fewer, larger files also shard less evenly across CI's 4 file-based shards.</p>
+        <p class="text-sm text-slate-500">Want me to record this as an ADR, so future reviews don't reopen it?</p>
+      </section>
+
+      <footer class="text-xs text-slate-400 pb-8">How the numbers were made:
+        <ul class="pl-4 list-disc">
+          <li>Inventory: <span class="mono">git ls-files</span>.</li>
+          <li>Mock classification: by import specifier.</li>
+          <li>Co-change: <span class="mono">git log --no-merges</span> from 2026-02-11 to 2026-10-08.</li>
+          <li>Caller counts: an import-graph scan by explore agents, read only.</li>
+        </ul>
+        No code was changed.
+      </footer>
+    </main>
+  
+
+<div class="mermaidTooltip" style="opacity: 0;"></div></body></html>
